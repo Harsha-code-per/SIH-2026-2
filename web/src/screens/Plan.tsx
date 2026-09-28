@@ -1,12 +1,16 @@
 import { motion } from 'motion/react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { fmt, type Explanation, type Plan } from '../api'
+import { useState } from 'react'
 import { useAfter } from '../auto'
+import { WorkOrderFlow } from '../WorkOrder'
 
 const pct = (a: number, b: number) => `${a >= b ? '+' : '−'}${Math.abs((100 * (a - b)) / b).toFixed(0)}%`
 
 export function PlanScreen({ plan, why, onNext, auto }: { plan: Plan; why: Explanation | null; onNext: () => void; auto: boolean }) {
-  useAfter(auto, 11000, onNext)
+  const [wo, setWo] = useState<'closed' | 'open' | 'done'>('closed')
+  useAfter(auto && wo === 'closed', 6000, () => setWo('open'))
+  useAfter(auto && wo === 'done', 800, onNext)
   const r = plan.recommended
   const b = plan.baseline
   const m = plan.mission
@@ -133,6 +137,7 @@ export function PlanScreen({ plan, why, onNext, auto }: { plan: Plan; why: Expla
               <tr><td>Steam</td><td>{fmt(b.x.steam_t)} t</td><td>{fmt(r.x.steam_t)} t</td><td className={r.x.steam_t <= b.x.steam_t ? 'ok' : 'amber'}>{pct(r.x.steam_t, b.x.steam_t)}</td></tr>
               <tr><td>Steam-oil ratio</td><td>{b.sor.toFixed(2)}</td><td>{r.sor.toFixed(2)}</td><td className={r.sor <= b.sor ? 'ok' : 'amber'}>{pct(r.sor, b.sor)}</td></tr>
               <tr><td>SRP energy</td><td>{fmt(b.energy_kwh)} kWh</td><td>{fmt(r.energy_kwh)} kWh</td><td className={r.energy_kwh <= b.energy_kwh ? 'ok' : 'amber'}>{pct(r.energy_kwh, b.energy_kwh)}</td></tr>
+              <tr><td>CO₂ (steam + power)</td><td>{fmt(b.co2_t, 1)} t</td><td>{fmt(r.co2_t, 1)} t</td><td className={r.co2_t <= b.co2_t ? 'ok' : 'amber'}>{pct(r.co2_t, b.co2_t)}</td></tr>
               <tr><td>Rod-float days</td><td>{b.float_days}</td><td>{r.float_days}</td><td className="ok">{b.float_days ? `−${b.float_days} d` : '–'}</td></tr>
               <tr><td>Rod-failure risk</td><td>{(b.failure_risk * 100).toFixed(0)}%</td><td>{(r.failure_risk * 100).toFixed(0)}%</td><td className="ok">{r.failure_risk < b.failure_risk ? 'lower' : '–'}</td></tr>
               <tr><td>Cost per barrel*</td><td>₹{fmt(b.cost_per_bbl)}</td><td>₹{fmt(r.cost_per_bbl)}</td><td className="ok">{pct(r.cost_per_bbl, b.cost_per_bbl)}</td></tr>
@@ -140,7 +145,11 @@ export function PlanScreen({ plan, why, onNext, auto }: { plan: Plan; why: Expla
           </table>
           <div className="mono muted" style={{ fontSize: 10, marginTop: 8 }}>* steam ₹2,500/t + power ₹9/kWh + failure risk × ₹12 lakh workover (assumed rates). Model estimates on synthetic history.</div>
         </div>
-        <button className="btn" style={{ justifySelf: 'end' }} onClick={onNext}>OPERATE THIS PLAN LIVE →</button>
+        <div style={{ display: 'flex', gap: 10, justifySelf: 'end' }}>
+          <button className="btn ghost" onClick={() => setWo('open')}>ISSUE WORK ORDER</button>
+          <button className="btn" onClick={onNext}>WHAT-IF SANDBOX →</button>
+        </div>
+        {wo === 'open' && <WorkOrderFlow mission={m} auto={auto} onClose={() => setWo('done')} />}
       </section>
     </div>
   )

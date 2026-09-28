@@ -7,7 +7,7 @@
 - the Field Gantt flips to practice and back
 - the Learn step ingests the live cycle
 
-The full run takes about 2½ minutes; record the voiceover to match the table below. `Esc` stops.
+The full run takes about 3½ minutes and includes the What-If sandbox, a work order with sign-off, and the Audit trail. Captions appear as a lower third (toggle with `C`), so the video also reads muted. Record the voiceover to match the table below. `Esc` stops.
 
 **Setup:**
 - Chrome in front (it must be the visible window, or animations pause), 1920×1080, fullscreen (F11), zoom 100%.

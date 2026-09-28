@@ -109,3 +109,27 @@ tr.struck td:not(:last-child) { text-decoration: line-through; text-decoration-c
 
 table.compact td { padding: 6px 10px; }
 table.compact th { padding: 6px 10px; }
+
+/* work order modal + printable paper */
+.modal { position: fixed; inset: 0; background: rgba(4, 7, 10, 0.78); display: grid; place-items: center; z-index: 30; padding: 24px; }
+.modal-body { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; width: min(1000px, 100%); max-height: 100%; overflow: auto; }
+input.text { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; font: 13px var(--mono); min-width: 240px; }
+.paper { background: #f7f5f0; color: #111; border-radius: 4px; padding: 26px 30px; font-family: var(--sans); }
+.paper h4 { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+.paper table.doc { font: 12px var(--mono); }
+.paper table.doc td, .paper table.doc th { border-bottom: 1px solid #d6d2c8; padding: 5px 8px; color: #111; }
+.paper table.doc th { color: #444; }
+.paper table.doc td:first-child { color: #444; }
+.stamp { display: inline-block; font: 800 14px var(--mono); letter-spacing: 0.14em; padding: 4px 10px; border: 2px solid; border-radius: 3px; transform: rotate(-3deg); }
+.stamp.approved { color: #1a7f4b; } .stamp.rejected { color: #b3261e; } .stamp.submitted { color: #a66a00; }
+.sign { border-top: 1px solid #111; padding-top: 6px; font-size: 11px; display: grid; gap: 2px; }
+.sign b { font-size: 15px; }
+.sign span { color: #555; }
+
+@media print {
+  body { background: #fff !important; }
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; inset: 0; border-radius: 0; }
+  .no-print { display: none !important; }
+}

@@ -4,7 +4,7 @@ export type Series = Record<'t_res' | 'mu_tub' | 'oil' | 'cum' | 'spm' | 'safe_s
 
 export type Strategy = {
   label: string; verdict: string; x: X; p10: number; p50: number; p90: number; sor: number
-  energy_kwh: number; kwh_per_bbl: number; cost_per_bbl: number; failure_risk: number; float_days: number
+  energy_kwh: number; kwh_per_bbl: number; cost_per_bbl: number; failure_risk: number; float_days: number; co2_t: number
   in_envelope: boolean; out_of_envelope: string[]; day_target: number | null; cum: number[]
 }
 export type Recommended = Strategy & {
@@ -22,7 +22,7 @@ export type Plan = {
   mission: Mission; feasible: boolean; message?: string; n: number
   funnel: { gate: string; reason: string; rejected: number }[]; trace: string[]; state: WellState
   strategies: Strategy[]; recommended: Recommended
-  baseline: { x: X; p50: number; energy_kwh: number; float_days: number; failure_risk: number; sor: number; cost_per_bbl: number; series: Series
+  baseline: { x: X; p50: number; energy_kwh: number; float_days: number; failure_risk: number; sor: number; cost_per_bbl: number; co2_t: number; series: Series
     inj_days: number; prod_start: number; r_heated: number; t_steam: number; resteam_day: number }
   evidence: { cycle: number; steam_t: number; inj_p_bar: number; soak_d: number; cum_oil_bbl: number; rod_failure: boolean; float_days: number }[]
   conformal_q: number; loco_mape: number; days: number
@@ -53,9 +53,26 @@ export type Live = {
 export type Job = { well_id: string; generator: number; start: number; inj_days: number; steam_t: number; cycle_end: number; gain_per_gen_day: number; x: X }
 export type Schedule = {
   jobs: Job[]; field_oil: number[]; per_well: Record<string, number[]>; generators: number; horizon: number
-  kpi: { oil_bbl: number; steam_t: number; sor: number; wells_steamed: number; cycles: number; float_days: number; expected_failures: number; net_value_cr: number }
+  kpi: { oil_bbl: number; steam_t: number; sor: number; wells_steamed: number; cycles: number; float_days: number; expected_failures: number; net_value_cr: number; co2_t: number }
 }
 export type FieldPlan = { practice: Schedule; sequencing_only: Schedule; welltwin: Schedule }
+export type WhatIf = Series & {
+  x: X & { heater_kw: number }; in_envelope: boolean; out_of_envelope: string[]
+  envelope: Record<keyof X, [number, number]>; bounds: Record<keyof X, [number, number]>; heater_max_kw: number
+  p10: number; p50: number; p90: number; energy_kwh: number; sor: number; cost_per_bbl: number; co2_t: number
+  float_days: number; heater_days: number; failure_risk: number; prod_start: number; resteam_day: number; r_heated: number
+  meets: Record<'target' | 'steam' | 'energy' | 'frac' | 'envelope' | 'rod', boolean>
+}
+export type WorkOrder = {
+  id: number; number: string; status: 'submitted' | 'approved' | 'rejected'; well_id: string; cycle: number; created: number
+  prepared_by: string; prepared_at: number; reviewed_by: string | null; reviewed_at: number | null; note: string | null
+  plan: {
+    mission: Mission; x: X; spm_schedule: { from_day: number; spm: number; vfd_hz: number }[]; p10: number; p50: number; p90: number
+    sor: number; energy_kwh: number; co2_t: number; cost_per_bbl: number; t_steam: number; inj_days: number; prod_start: number
+    resteam_day: number; day_target: number; evidence: { cycle: number }[]; baseline_float_days: number
+  }
+}
+export type AuditEvent = { id: number; ts: number; actor: string; role: string; kind: string; well_id: string; text: string }
 export type Issue = { level: 'ok' | 'warning' | 'error'; file: string; msg: string }
 export type TwinSnap = { theta: { q_cold: number; tau0: number; drag_c: number; deg: number }; envelope: Record<keyof X, [number, number]>; cycles: number; conformal_q: number; loco_mape: number }
 export type Learned = {
@@ -78,6 +95,7 @@ export const api = {
   parse: (text: string, well_id: string) => call<{ mission: Mission; defaulted: string[]; source: string }>('parse', { text, well_id }),
   mission: (m: Mission) => call<Plan>('mission', m),
   explain: (m: Mission) => call<Explanation>('explain', m),
+  simulate: (mission: Mission, x: Record<string, number>, controller: boolean) => call<WhatIf>('simulate', { mission, x, controller }),
   dyno: (mission: Mission, mode: 'plan' | 'practice', day: number) => call<Card>('dyno', { mission, mode, day }),
   liveStart: (m: Mission) => call<Live>('live/start', m),
   liveStep: (days: number) => call<Live>(`live/step?days=${days}`, {}),
@@ -86,6 +104,15 @@ export const api = {
   fieldSchedule: (generators: number, horizon: number) => call<FieldPlan>(`field/schedule?generators=${generators}&horizon=${horizon}`),
   learnLive: () => call<Learned>('learn/ingest-live', {}),
   learnUpload: (cycles_csv: string, daily_csv: string) => call<Learned>('learn/upload', { cycles_csv, daily_csv }),
+  learnUploadXlsx: async (f: File): Promise<Learned> => {
+    const r = await fetch('/api/learn/upload-xlsx', { method: 'POST', body: f })
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? r.statusText)
+    return r.json()
+  },
+  woCreate: (mission: Mission, prepared_by: string) => call<WorkOrder>('workorders', { mission, prepared_by }),
+  woReview: (id: number, reviewer: string, approve: boolean, note = '') => call<WorkOrder>(`workorders/${id}/review`, { reviewer, approve, note }),
+  woList: () => call<WorkOrder[]>('workorders'),
+  audit: () => call<AuditEvent[]>('audit'),
   learnReset: () => call<{ ok: boolean }>('learn/reset', {}),
   learnTemplate: () => call<{ cycles: string; daily: string }>('learn/template'),
 }

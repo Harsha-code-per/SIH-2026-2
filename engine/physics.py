@@ -110,8 +110,10 @@ def simulate(x, well, days=180, controller=True, spm_override=None):
         Used for issued work orders and operator changes mid-cycle.
     Returns dict of (N, days) arrays + (N,) summaries.
     """
-    steam, p, soak, stroke, spm_max = (np.atleast_1d(np.asarray(x[k], float)) for k in P.DECISIONS)
+    steam, p, soak, stroke, spm_max, heater_kw = np.broadcast_arrays(
+        *(np.atleast_1d(np.asarray(x[k], float)) for k in P.DECISIONS), np.atleast_1d(np.asarray(x.get("heater_kw", 0.0), float)))
     n = steam.shape[0]
+    heater_w = heater_kw * 1e3
     ts, r_h, inj = heated_zone(steam, p, soak)
     start = inj + soak
     tau = well["tau0"] * (r_h / 6.0) ** 0.8  # bigger heated zone cools slower
@@ -123,11 +125,15 @@ def simulate(x, well, days=180, controller=True, spm_override=None):
     tp = np.clip(t, 0, None)
     t_res = P.T_RES + (ts[:, None] - P.T_RES) * np.exp(-tp / tau[:, None])
     mu_res = viscosity_cp(t_res)
-    t_tub = P.T_RES + 0.75 * (t_res - P.T_RES) - 4.0  # fluid cools rising 1,100 m
-    mu_tub = viscosity_cp(t_tub)
     wc = 0.25 + 0.45 * np.exp(-tp / 12.0)  # condensed steam flows back first
     oil_in = q_cold * stimulation_ratio(mu_res, r_h[:, None], well["skin"])
     gross_in = oil_in / (1 - wc)
+    # downhole heater at the pump warms the produced fluid; most of it leaks to the formation on the way up
+    m_dot = gross_in * 0.159 * 980 / 86400
+    t_tub = P.T_RES + 0.75 * (t_res - P.T_RES) - 4.0  # fluid cools rising 1,100 m
+    heater_on = on & (heater_w[:, None] > 0) & (t_tub < P.HEATER_ON_BELOW_C)  # thermostatic
+    t_tub = t_tub + np.where(heater_on, heater_w[:, None] / (m_dot * P.FLUID_CP + P.HEATER_LOSS_W_PER_K), 0.0)
+    mu_tub = viscosity_cp(t_tub)
     ev = volumetric_eff(mu_tub)
 
     ceiling = np.broadcast_to(spm_max[:, None], t.shape)
@@ -145,7 +151,7 @@ def simulate(x, well, days=180, controller=True, spm_override=None):
     oil = np.where(on, np.minimum(gross_in, cap) * (1 - wc), 0.0)
     fm, goodman, fric_kw = rod_mechanics(spm, stroke[:, None], mu_tub, well["drag_c"])
     hyd_kw = 1000 * 9.81 * P.PUMP_DEPTH * (np.minimum(gross_in, cap) * 0.159 / 86400) / 1e3
-    kwh = np.where(on, (hyd_kw + fric_kw) / 0.55 * 24 + 1.2 * 24, 0.0)
+    kwh = np.where(on, (hyd_kw + fric_kw) / 0.55 * 24 + 1.2 * 24 + np.where(heater_on, heater_w[:, None] / 1e3 * 24, 0.0), 0.0)
 
     econ = on & (oil < P.ECON_LIMIT_BOPD) & (tp > 10)
     cutoff = np.where(econ.any(1), econ.argmax(1), days)
@@ -162,6 +168,6 @@ def simulate(x, well, days=180, controller=True, spm_override=None):
         t_res=t_res, mu_res=mu_res, mu_tub=mu_tub, oil=oil, cum=cum, spm=np.where(on, spm, 0.0),
         safe_spm=limit, float_margin=fm, fillage=fillage, kwh=kwh, cum_kwh=np.cumsum(kwh, 1), wc=wc,
         t_steam=ts, r_heated=r_h, inj_days=inj, prod_start=start, cutoff_day=cutoff,
-        float_days=float_day.sum(1), pound_days=pound_day.sum(1),
+        float_days=float_day.sum(1), pound_days=pound_day.sum(1), heater_days=(heater_on & live).sum(1),
         peak_goodman=peak_goodman, failure_risk=risk,
     )

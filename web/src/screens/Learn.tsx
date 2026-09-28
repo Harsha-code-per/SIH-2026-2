@@ -15,7 +15,7 @@ export function LearnScreen({ onNext, auto }: { onNext: () => void; auto: boolea
   const [res, setRes] = useState<Learned | null>(null)
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
-  const [files, setFiles] = useState<{ cycles?: File; daily?: File }>({})
+  const [files, setFiles] = useState<{ cycles?: File; daily?: File; workbook?: File }>({})
 
   const run = async (label: string, fn: () => Promise<Learned>) => {
     setBusy(label)
@@ -28,7 +28,7 @@ export function LearnScreen({ onNext, auto }: { onNext: () => void; auto: boolea
       setBusy('')
     }
   }
-  const upload = () => files.cycles && files.daily &&
+  const upload = () => files.workbook ? run('upload', () => api.learnUploadXlsx(files.workbook!)) : files.cycles && files.daily &&
     run('upload', async () => api.learnUpload(await files.cycles!.text(), await files.daily!.text()))
   const templates = async () => {
     const t = await api.learnTemplate()
@@ -61,19 +61,20 @@ export function LearnScreen({ onNext, auto }: { onNext: () => void; auto: boolea
           <button className="btn" onClick={() => run('live', api.learnLive)} disabled={!!busy}>{busy === 'live' ? 'RECALIBRATING…' : 'INGEST LIVE CYCLE'}</button>
         </section>
         <section className="panel" style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
-          <div className="label">Source 2 · Your field data (CSV)</div>
-          {(['cycles', 'daily'] as const).map((k) => (
+          <div className="label">Source 2 · Your field data (Excel or CSV)</div>
+          {(['workbook', 'cycles', 'daily'] as const).map((k) => (
             <label key={k} className="btn ghost" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-              <span>{k.toUpperCase()}.CSV</span>
+              <span>{k === 'workbook' ? 'WORKBOOK.XLSX' : `${k.toUpperCase()}.CSV`}</span>
               <span className={files[k] ? 'cyan' : 'muted'} style={{ letterSpacing: 0, textTransform: 'none', fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {files[k]?.name ?? 'choose file…'}
               </span>
-              <input type="file" hidden accept=".csv,text/csv" onChange={(e) => setFiles({ ...files, [k]: e.target.files?.[0] })} />
+              <input type="file" hidden accept={k === 'workbook' ? '.xlsx' : '.csv,text/csv'} onChange={(e) => setFiles({ ...files, [k]: e.target.files?.[0] })} />
             </label>
           ))}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn ghost" onClick={upload} disabled={!files.cycles || !files.daily || !!busy}>{busy === 'upload' ? 'CHECKING…' : 'VALIDATE & INGEST'}</button>
-            <button className="btn ghost" onClick={templates}>TEMPLATES ↓</button>
+            <button className="btn ghost" onClick={upload} disabled={!(files.workbook || (files.cycles && files.daily)) || !!busy}>{busy === 'upload' ? 'CHECKING…' : 'VALIDATE & INGEST'}</button>
+            <button className="btn ghost" onClick={templates}>CSV ↓</button>
+            <a className="btn ghost" href="/api/learn/template.xlsx" style={{ textDecoration: 'none' }}>XLSX ↓</a>
           </div>
         </section>
         <section className="panel" style={{ display: 'grid', gap: 8, alignContent: 'start' }}>
@@ -141,7 +142,7 @@ export function LearnScreen({ onNext, auto }: { onNext: () => void; auto: boolea
           </section>
         </div>
       )}
-      <button className="btn next" onClick={onNext}>FINISH →</button>
+      <button className="btn next" onClick={onNext}>AUDIT TRAIL →</button>
     </div>
   )
 }

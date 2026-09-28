@@ -56,6 +56,7 @@ export function FieldScreen({ onNext, auto }: { onNext: () => void; auto: boolea
               <tr><td>Oil</td><td>{fmt(p.oil_bbl)} bbl</td><td>{fmt(w.oil_bbl)} bbl</td><td className={w.oil_bbl >= p.oil_bbl ? 'ok' : 'amber'}>{pct(w.oil_bbl, p.oil_bbl)}</td></tr>
               <tr><td>Steam</td><td>{fmt(p.steam_t)} t</td><td>{fmt(w.steam_t)} t</td><td className={w.steam_t <= p.steam_t ? 'ok' : 'amber'}>{pct(w.steam_t, p.steam_t)}</td></tr>
               <tr><td>Field SOR</td><td>{p.sor}</td><td>{w.sor}</td><td className={w.sor <= p.sor ? 'ok' : 'amber'}>{pct(w.sor, p.sor)}</td></tr>
+              <tr><td>CO₂ (steam + power)</td><td>{fmt(p.co2_t)} t</td><td>{fmt(w.co2_t)} t</td><td className={w.co2_t <= p.co2_t ? 'ok' : 'amber'}>{pct(w.co2_t, p.co2_t)}</td></tr>
               <tr><td>CSS cycles run</td><td>{p.cycles}</td><td>{w.cycles}</td><td className="muted">{w.cycles - p.cycles >= 0 ? '+' : ''}{w.cycles - p.cycles}</td></tr>
               <tr><td>Rod-float days</td><td>{p.float_days}</td><td>{w.float_days}</td><td className="ok">−{p.float_days - w.float_days}</td></tr>
               <tr><td>Expected rod failures</td><td>{p.expected_failures}</td><td>{w.expected_failures}</td><td className="ok">−{(p.expected_failures - w.expected_failures).toFixed(1)}</td></tr>

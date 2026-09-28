@@ -1,22 +1,38 @@
+import { AnimatePresence, motion } from 'motion/react'
 import { useCallback, useEffect, useState } from 'react'
 import { api, type Explanation, type Field, type Mission, type Plan, type WellState } from './api'
+import { AuditScreen } from './screens/Audit'
 import { FieldScreen } from './screens/Field'
 import { LearnScreen } from './screens/Learn'
 import { LiveScreen } from './screens/Live'
 import { MissionScreen } from './screens/Mission'
 import { PlanScreen } from './screens/Plan'
 import { RaceScreen } from './screens/Race'
+import { SandboxScreen } from './screens/Sandbox'
 import { Intro, Outro } from './screens/Title'
 import { TraceScreen } from './screens/Trace'
 import { TwinScreen } from './screens/Twin'
 
-const STAGES = ['intro', 'mission', 'trace', 'twin', 'race', 'plan', 'live', 'field', 'learn', 'outro'] as const
+const STAGES = ['intro', 'mission', 'trace', 'twin', 'race', 'plan', 'sandbox', 'live', 'field', 'learn', 'audit', 'outro'] as const
 type Stage = (typeof STAGES)[number]
 const NAV: [string, [Stage, string][]][] = [
-  ['PLAN A CYCLE', [['mission', 'MISSION'], ['trace', 'ANALYZE'], ['twin', 'DIGITAL TWIN'], ['race', 'COUNTERFACTUALS'], ['plan', 'PLAN']]],
-  ['OPERATE', [['live', 'LIVE OPS'], ['field', 'FIELD'], ['learn', 'LEARN']]],
+  ['PLAN A CYCLE', [['mission', 'MISSION'], ['trace', 'ANALYZE'], ['twin', 'DIGITAL TWIN'], ['race', 'COUNTERFACTUALS'], ['plan', 'PLAN'], ['sandbox', 'WHAT-IF']]],
+  ['OPERATE', [['live', 'LIVE OPS'], ['field', 'FIELD'], ['learn', 'LEARN'], ['audit', 'AUDIT']]],
 ]
-const NEEDS_PLAN: Stage[] = ['trace', 'twin', 'race', 'plan']
+const NEEDS_PLAN: Stage[] = ['trace', 'twin', 'race', 'plan', 'sandbox']
+// Lower-third captions so the recorded demo reads without a voiceover. No numbers here: every number on screen comes from the engine.
+const CAPTIONS: Partial<Record<Stage, string>> = {
+  mission: 'The engineer states a mission in plain language. It becomes a target, a deadline and steam + energy budgets.',
+  trace: 'The twin calibrates itself on this well\'s history, then simulates thousands of coupled steam + pump strategies.',
+  twin: 'As the reservoir cools, the oil thickens. The plan slows the pump before the rods float; constant-speed practice does not.',
+  race: 'Counterfactuals race to the target. Over-budget plans are struck out, and anything outside what this well has done is refused.',
+  plan: 'One explainable plan: it meets the target even in the pessimistic case, with less steam and no rod float.',
+  sandbox: 'What-if: push beyond history and uncertainty widens. Compare a downhole heater with smart pump control.',
+  live: 'Live operations: the twin tracks the well daily, re-learns cooling and rod drag, and warns of rod float weeks ahead.',
+  field: 'Across the field: which well gets the steam generator next, for more oil per tonne of steam.',
+  learn: 'Every executed cycle becomes history, and the twin gets more accurate.',
+  audit: 'Every plan is signed off by two people, and every decision is on the record.',
+}
 const DEFAULT: Mission = { well_id: 'BGW-08', target_bbl: 1600, deadline_d: 90, steam_budget_t: 1000, energy_budget_kwh: 7000 }
 
 export default function App() {
@@ -29,6 +45,7 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [auto, setAuto] = useState(false) // one-take demo for recording: every screen plays itself
+  const [captions, setCaptions] = useState(true)
 
   const startDemo = useCallback(() => {
     api.learnReset().catch(() => {})
@@ -80,13 +97,14 @@ export default function App() {
       if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(-1)
       if (e.key === 'd' || e.key === 'D') startDemo()
       if (e.key === 'Escape') setAuto(false)
+      if (e.key === 'c' || e.key === 'C') setCaptions((c) => !c)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [go, startDemo])
 
   if (stage === 'intro') return <Intro auto={auto} onNext={() => setStage('mission')} onDemo={startDemo} />
-  if (stage === 'outro') return <Outro onBack={() => { setAuto(false); setStage('learn') }} />
+  if (stage === 'outro') return <Outro onBack={() => { setAuto(false); setStage('audit') }} />
 
   const at = STAGES.indexOf(stage)
   return (
@@ -115,11 +133,23 @@ export default function App() {
         {stage === 'trace' && plan && <TraceScreen auto={auto} plan={plan} onNext={() => setStage('twin')} />}
         {stage === 'twin' && plan && <TwinScreen auto={auto} plan={plan} onNext={() => setStage('race')} />}
         {stage === 'race' && plan && <RaceScreen auto={auto} plan={plan} onNext={() => setStage('plan')} />}
-        {stage === 'plan' && plan && <PlanScreen auto={auto} plan={plan} why={why} onNext={() => setStage('live')} />}
+        {stage === 'plan' && plan && <PlanScreen auto={auto} plan={plan} why={why} onNext={() => setStage('sandbox')} />}
+        {stage === 'sandbox' && plan && <SandboxScreen auto={auto} plan={plan} onNext={() => setStage('live')} />}
         {stage === 'live' && <LiveScreen auto={auto} mission={mission} onNext={() => setStage('field')} />}
         {stage === 'field' && <FieldScreen auto={auto} onNext={() => setStage('learn')} />}
-        {stage === 'learn' && <LearnScreen auto={auto} onNext={() => setStage('outro')} />}
+        {stage === 'learn' && <LearnScreen auto={auto} onNext={() => setStage('audit')} />}
+        {stage === 'audit' && <AuditScreen auto={auto} onNext={() => setStage('outro')} />}
       </main>
+      <AnimatePresence>
+        {auto && captions && CAPTIONS[stage] && (
+          <motion.div key={stage} initial={{ opacity: 0, y: 12, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, x: '-50%' }} transition={{ duration: 0.5 }}
+            style={{ position: 'fixed', left: '50%', bottom: 26, maxWidth: 980, padding: '12px 22px', borderRadius: 6,
+              background: 'rgba(8,12,16,0.88)', border: '1px solid var(--line)', fontSize: 17, lineHeight: 1.45, textAlign: 'center', zIndex: 20,
+              boxShadow: '0 10px 40px rgba(0,0,0,.5)' }}>
+            {CAPTIONS[stage]}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

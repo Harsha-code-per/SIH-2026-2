@@ -119,6 +119,7 @@ def schedule(generators=1, horizon=180, plans="twin", order="value"):
                  wells_steamed=len({j["well_id"] for j in done}), cycles=len(done),
                  float_days=sum(pl[j["well_id"]]["float_days"] for j in done),
                  expected_failures=round(sum(pl[j["well_id"]]["failure_risk"] for j in done), 1),
+                 co2_t=round(steam * P.CO2_T_PER_T_STEAM + sum(pl[j["well_id"]]["kwh"] for j in done) * P.CO2_T_PER_KWH),
                  net_value_cr=round((oil * P.OIL_PRICE_PER_BBL - steam * P.STEAM_COST_PER_T
                                      - sum(pl[j["well_id"]]["failure_risk"] for j in done) * P.WORKOVER_COST) / 1e7, 2)),
         generators=generators, horizon=horizon, plans=plans, order=order,

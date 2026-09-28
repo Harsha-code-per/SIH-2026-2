@@ -10,6 +10,7 @@ make restart  # after any engine/ change (uvicorn does not hot-reload)
 make test     # engine self-check + UI type-check; must pass before every commit
 make demo     # built UI + API on :8765 in one process (for recording)
 make data     # regenerate synthetic history (then re-check the demo story)
+make docker   # container build + run (UI + API :8765); make docker-down
 ```
 
 ## Layout
@@ -22,6 +23,7 @@ make data     # regenerate synthetic history (then re-check the demo story)
 - `engine/live.py`: one global live session. The field = hidden truth + surprises (faster cooling, emulsion drag). The twin re-fits (q_cold, tau0, drag_c) with priors, forecasts, raises alerts; approved actions change the issued SPM.
 - `engine/field.py`: per-well best cycle (`cycle_plan`, cached) + generator list scheduling; `compare()` = practice vs sequencing-only vs WellTwin.
 - `engine/learn.py`: CSV contract validation, ingest into `history.EXTRA` (in-memory), cache reset + recalibration, plan-vs-actual.
+- `engine/audit.py`: SQLite (stdlib) audit events + work orders with four-eyes review. `WELLTWIN_DB` env overrides the path (Docker uses a volume).
 - `engine/llm.py`: NVIDIA NIM parse/explain + number guard + fallbacks.
 - `engine/api.py`: FastAPI routes under `/api`; serves `web/dist` if built.
 - `web/src/`: `App.tsx` stage machine; `screens/*` one file per stage; `WellScene.tsx` animated cross-section; `index.css` design tokens.

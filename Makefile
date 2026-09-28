@@ -4,7 +4,7 @@ RUN      := .run
 PY       := .venv/bin/python
 
 .DEFAULT_GOAL := help
-.PHONY: help install up down restart status logs test build demo data clean
+.PHONY: help install up down restart status logs test build demo data clean docker docker-down
 
 help: ## Show all commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*## "}{printf "  make %-9s %s\n",$$1,$$2}'
@@ -33,6 +33,8 @@ up: install down ## Start API + UI dev servers in the background
 down: ## Stop both servers
 	@pkill -f '[u]vicorn engine.api:app --port $(API_PORT)' || true
 	@pkill -f '[v]ite.*--port $(WEB_PORT)' || true
+	@n=0; while curl -s -o /dev/null localhost:$(API_PORT) || curl -s -o /dev/null localhost:$(WEB_PORT); do \
+		n=$$((n+1)); [ $$n -gt 50 ] && break; sleep 0.2; done
 	@echo "stopped"
 
 restart: down up ## Restart both servers (after engine changes)
@@ -54,6 +56,14 @@ build: install ## Build the UI into web/dist (served by the API)
 demo: build down ## One process for recording: UI + API on :$(API_PORT)
 	@echo "open http://localhost:$(API_PORT)"
 	.venv/bin/uvicorn engine.api:app --port $(API_PORT)
+
+docker: ## Build + run everything in Docker on :$(API_PORT) (UI + API, persistent audit trail)
+	docker compose up --build -d
+	@printf 'Starting'; until curl -sf localhost:$(API_PORT)/api/field >/dev/null; do printf .; sleep 1; done; echo
+	@echo "  open http://localhost:$(API_PORT) · stop → make docker-down"
+
+docker-down: ## Stop the Docker deployment
+	docker compose down
 
 data: .venv/.ok ## Regenerate the synthetic field history
 	rm -rf data

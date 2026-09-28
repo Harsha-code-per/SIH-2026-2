@@ -46,7 +46,9 @@ An engineer states a **mission**: *"1,600 bbl in 90 days, 1,000 t of steam, 7 MW
 | **Live Ops** | The twin shadows the well through the cycle on daily SCADA + dyno data. It re-estimates cooling and rod drag as they drift, forecasts float three weeks ahead, and proposes a concrete SPM/VFD change for the operator to approve or reject. Every decision goes to the audit log. |
 | **Dynamometer cards** | Surface and downhole cards solved from the Gibbs damped wave equation using the twin's viscosity, so they morph as the well cools and show rod-float separation and fluid pound. |
 | **Field scheduler** | With limited steam generators, decides which well to steam next by incremental oil per generator-day, and compares against steaming wells in turn. |
-| **Learning loop** | Ingest the executed cycle (or OIL CSV exports). Data-quality checks run, the twin recalibrates, the envelope grows, and plan-vs-actual error is re-measured. |
+| **Learning loop** | Ingest the executed cycle, or OIL exports as **Excel (.xlsx)** or CSV. Data-quality checks run, the twin recalibrates, the envelope grows, and plan-vs-actual error is re-measured. |
+| **What-if sandbox** | Sliders for every CSS + SRP setting, drawn over the well's validated envelope, plus a **downhole electric heater** lever. The twin answers instantly with P10–P90, SOR, energy, CO₂, cost and rod-float days. |
+| **Work orders + audit** | The recommended plan becomes a printable operating order with **four-eyes sign-off** (engineer prepares, a different supervisor approves). Every decision, ingest and approval is kept in a persistent SQLite audit trail. |
 
 | Mission | Digital twin (typical practice → rod float) |
 |---|---|
@@ -95,6 +97,7 @@ Requirements: Python 3.12+ with [`uv`](https://docs.astral.sh/uv/), Node 22+.
 make up        # install deps, start API :8765 + UI :5199
 make down      # stop
 make help      # all commands (test, demo, build, data, logs, …)
+make docker    # or: one container, UI + API on :8765, audit trail on a volume
 ```
 
 Open **http://localhost:5199** and press `→` to walk Mission → Analyze → Digital Twin → Counterfactuals → Plan → Live Ops → Field → Learn.
@@ -168,6 +171,9 @@ The twin must recover each well from that history, exactly as it would from real
 - [x] Live operations: streaming well data, state tracking, predictive float alerts, approve/reject + audit log
 - [x] Field steam scheduler: which well to steam next with limited generators
 - [x] Shadow mode + learning loop: data-quality checks, plan-vs-actual, automatic recalibration
+- [x] What-if sandbox with downhole-heater lever; CO₂ accounting; Excel import
+- [x] Work orders with four-eyes sign-off, printable PDF, persistent audit trail
+- [x] Docker image + compose, GitHub Actions CI (tests, build, image)
 - [ ] CNN card classifier trained on real OIL dyno cards (replaces rule-based diagnosis)
 - [ ] CMG STARS runs as surrogate training data; Bayesian optimization
 - [ ] Field deployment: containerized, on-prem, OPC-UA / Modbus to SCADA and VFDs, role-based sign-off

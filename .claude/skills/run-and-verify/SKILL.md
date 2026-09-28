@@ -23,8 +23,11 @@ description: Start the WellTwin prototype and verify the full demo flow end to e
    | Digital twin | Plays day 0 → re-steam; TYPICAL PRACTICE late in the cycle shows **ROD FLOAT** |
    | Counterfactuals | Curves race; D and E struck out; E envelope panel appears |
    | Plan | Checks all ✓; explanation shows "Written by NVIDIA Nemotron" (or the template when offline) |
+   | What-If | Sliders show the validated band; steam past history → red, wide band. Heater lowers float days and raises energy. The compared-with-plan-C table updates |
+   | Work order (Plan → ISSUE WORK ORDER) | Submit with one name. Approving with the same name is refused (four-eyes); a different name approves and the stamp shows APPROVED. Do not click Print in automation (the dialog blocks the browser) |
    | Live Ops | Streams at 1×/3×; pauses on alerts: cooling (~day 34), drag (~day 66), float forecast (~day 70, 19 d ahead). APPROVE, and rod-float days stay 0. The dyno card updates every 5 days |
    | Field | 1/2/3 generators and horizon recompute; WellTwin beats practice on net value with 0 float days; the Gantt toggles |
+   | Audit | Work orders and events persist across `make restart` (data/audit.db) |
    | Learn | After Live Ops completes, INGEST LIVE CYCLE shows cycles 9 → 10 and cycle error falls; RESET HISTORY restores the baseline |
 
    The Chrome window must be visible. Hidden tabs pause animation frames and throttle timers, so screens look frozen.

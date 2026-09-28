@@ -21,6 +21,34 @@ RANGES = {"steam_t": (50, 5000), "inj_p_bar": (10, 200), "soak_d": (0, 30), "str
 _invalidate = []  # callbacks registered by the API to drop its own caches
 
 
+def parse_xlsx(data):
+    """Workbook with sheets 'cycles' and 'daily' (any case), same columns as the CSVs."""
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    sheets = {ws.title.strip().lower(): ws for ws in wb.worksheets}
+    out = {}
+    for name in ("cycles", "daily"):
+        if name not in sheets:
+            raise ValueError(f"workbook needs a sheet named '{name}' (found: {', '.join(sheets) or 'none'})")
+        rows = list(sheets[name].iter_rows(values_only=True))
+        head = [str(h).strip() for h in rows[0]] if rows else []
+        out[name] = [{h: ("" if v is None else str(v)) for h, v in zip(head, r)} for r in rows[1:] if any(v is not None for v in r)]
+    return out["cycles"], out["daily"]
+
+
+def template_xlsx():
+    from openpyxl import Workbook
+    wb = Workbook()
+    for i, (name, text) in enumerate(template().items()):
+        ws = wb.active if i == 0 else wb.create_sheet()
+        ws.title = name
+        for row in csv.reader(io.StringIO(text)):
+            ws.append([float(v) if v.replace(".", "", 1).isdigit() else v for v in row])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def parse_csv(text):
     return [{k.strip(): v.strip() for k, v in r.items()} for r in csv.DictReader(io.StringIO(text.strip()))]
 

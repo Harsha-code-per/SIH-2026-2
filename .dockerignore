@@ -1,0 +1,9 @@
+.git
+.venv
+.run
+.env
+web/node_modules
+web/dist
+data/audit.db
+**/__pycache__
+docs/img

@@ -4,12 +4,12 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import dyno, field as fieldsched, learn, live, llm, optimize, params as P, twin
+from . import audit, dyno, field as fieldsched, learn, live, llm, optimize, params as P, twin
 from .history import DAYS
 from .physics import simulate
 
@@ -35,7 +35,7 @@ class Text(BaseModel):
 
 
 class WhatIf(BaseModel):
-    well_id: str = optimize.DEMO["well_id"]
+    mission: Mission = Mission()
     x: dict[str, float]
     controller: bool = True
 
@@ -94,15 +94,33 @@ def explain(m: Mission):
 
 @app.post("/api/simulate")
 def what_if(w: WhatIf):
-    _check(w.well_id)
-    if set(w.x) != set(P.DECISIONS):
-        raise HTTPException(422, f"x must have keys {P.DECISIONS}")
-    x = {k: np.clip(v, *P.BOUNDS[k]) for k, v in w.x.items()}
-    r = simulate(x, twin.well_model(w.well_id, twin.state(w.well_id)["next_cycle"]), DAYS, controller=w.controller)
-    inside, bad = twin.in_envelope(twin.field()["twins"][w.well_id]["envelope"], {k: np.atleast_1d(v) for k, v in x.items()})
-    return _py(dict({k: np.round(r[k][0], 2) for k in optimize.SERIES}, in_envelope=bool(inside[0]),
-                    out_of_envelope=[k for k, b in bad.items() if b[0]], float_days=r["float_days"][0],
-                    failure_risk=r["failure_risk"][0], prod_start=r["prod_start"][0], r_heated=r["r_heated"][0]))
+    """Sandbox: one operating point through the twin, with the same honesty rules as the optimizer."""
+    m = w.mission
+    _check(m.well_id)
+    if not set(P.DECISIONS) <= set(w.x) <= set(P.DECISIONS) | {"heater_kw"}:
+        raise HTTPException(422, f"x must have keys {P.DECISIONS} (+ optional heater_kw)")
+    x = {k: float(np.clip(v, *P.BOUNDS[k])) for k, v in w.x.items() if k in P.BOUNDS}
+    x["heater_kw"] = float(np.clip(w.x.get("heater_kw", 0.0), 0, P.HEATER_MAX_KW))
+    st = twin.state(m.well_id)
+    r = simulate(x, twin.well_model(m.well_id, st["next_cycle"]), DAYS, controller=w.controller)
+    inside, bad = twin.in_envelope(st["envelope"], {k: np.atleast_1d(v) for k, v in x.items() if k in P.DECISIONS})
+    q = twin.field()["conformal_q"] * (1 if inside[0] else 2)
+    D = int(m.deadline_d) - 1
+    p50 = float(r["cum"][0, D])
+    kwh = float(r["cum_kwh"][0, D])
+    cost = x["steam_t"] * P.STEAM_COST_PER_T + kwh * P.POWER_COST_PER_KWH + float(r["failure_risk"][0]) * P.WORKOVER_COST
+    return _py(dict(
+        {k: np.round(r[k][0], 2) for k in optimize.SERIES}, x=x, in_envelope=bool(inside[0]),
+        out_of_envelope=[k for k, b in bad.items() if b[0]], envelope=st["envelope"], bounds=P.BOUNDS,
+        heater_max_kw=P.HEATER_MAX_KW, p50=round(p50), p10=round(p50 * (1 - q)), p90=round(p50 * (1 + q)),
+        energy_kwh=round(kwh), sor=round(x["steam_t"] / max(p50 * 0.159, 1e-6), 2), cost_per_bbl=round(cost / max(p50, 1)),
+        co2_t=round(optimize.co2(x["steam_t"], kwh), 1), float_days=int(r["float_days"][0]),
+        heater_days=int(r["heater_days"][0]), failure_risk=round(float(r["failure_risk"][0]), 3),
+        prod_start=float(r["prod_start"][0]), resteam_day=int(r["cutoff_day"][0]), r_heated=float(r["r_heated"][0]),
+        meets=dict(target=p50 * (1 - q) >= m.target_bbl, steam=x["steam_t"] <= m.steam_budget_t,
+                   energy=kwh <= m.energy_budget_kwh, frac=x["inj_p_bar"] <= P.FRAC_LIMIT_BAR, envelope=bool(inside[0]),
+                   rod=int(r["float_days"][0]) == 0),
+    ))
 
 
 class DynoReq(BaseModel):
@@ -127,6 +145,7 @@ def dyno_card(q: DynoReq):
 class Decision(BaseModel):
     alert_id: int
     approve: bool
+    actor: str = Field("", max_length=80)
 
 
 @app.post("/api/live/start")
@@ -144,7 +163,13 @@ def live_step(days: int = 1):
 def live_decide(d: Decision):
     if not live.S:
         raise HTTPException(409, "no live session")
-    return _py(live.decide(d.alert_id, d.approve))
+    a = next((a for a in live.S["alerts"] if a["id"] == d.alert_id), None)
+    if a is None:
+        raise HTTPException(404, "unknown alert")
+    snap = live.decide(d.alert_id, d.approve)
+    audit.log("live_decision", f"day {live.S['day']}: {'approved' if d.approve else 'rejected'}: {a['text'].split('.')[0]}",
+              live.S["well_id"], d.actor or "operator", "operator", dict(alert=a["kind"]))
+    return _py(snap)
 
 
 @app.get("/api/live/dyno")
@@ -181,17 +206,84 @@ def learn_live():
     if not live.S or not live.snapshot()["complete"]:
         raise HTTPException(409, "run the live cycle to the re-steam trigger first")
     cyc, daily = live.as_history()
-    return _py(learn.ingest([cyc], daily, "live operations"))
+    return _py(_logged_ingest(learn.ingest([cyc], daily, "live operations")))
 
 
 @app.post("/api/learn/upload")
 def learn_upload(u: Upload):
-    return _py(learn.ingest(learn.parse_csv(u.cycles_csv), learn.parse_csv(u.daily_csv), "csv upload"))
+    return _py(_logged_ingest(learn.ingest(learn.parse_csv(u.cycles_csv), learn.parse_csv(u.daily_csv), "csv upload")))
+
+
+@app.post("/api/learn/upload-xlsx")
+async def learn_upload_xlsx(request: Request):
+    data = await request.body()
+    if not data or len(data) > 20_000_000:
+        raise HTTPException(413 if data else 422, "send one .xlsx workbook (max 20 MB) as the request body")
+    try:
+        cycles, daily = learn.parse_xlsx(data)
+    except Exception as e:
+        raise HTTPException(422, f"could not read workbook: {e}")
+    return _py(_logged_ingest(learn.ingest(cycles, daily, "excel upload")))
+
+
+@app.get("/api/learn/template.xlsx")
+def learn_template_xlsx():
+    return Response(learn.template_xlsx(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": "attachment; filename=welltwin_template.xlsx"})
 
 
 @app.post("/api/learn/reset")
 def learn_reset():
     return _py(learn.reset())
+
+
+def _logged_ingest(res):
+    if res["ok"]:
+        audit.log("ingest", f"cycle #{res['cycle']} ingested from {res['source']}; cycle error "
+                            f"{res['cum_error_before'] * 100:.1f}% → {res['cum_error_after'] * 100:.1f}% after recalibration",
+                  res["well_id"], "data engineer", "data")
+    return res
+
+
+# --- work orders + audit trail ---
+class WorkOrderReq(BaseModel):
+    mission: Mission = Mission()
+    prepared_by: str = Field(min_length=2, max_length=80)
+
+
+class Review(BaseModel):
+    reviewer: str = Field(min_length=2, max_length=80)
+    approve: bool
+    note: str = Field("", max_length=300)
+
+
+@app.post("/api/workorders")
+def wo_create(w: WorkOrderReq):
+    _check(w.mission.well_id)
+    res = _plan(tuple(sorted(w.mission.model_dump().items())))
+    if not res["feasible"]:
+        raise HTTPException(409, res["message"])
+    return _py(audit.create_work_order(res, w.prepared_by.strip()))
+
+
+@app.post("/api/workorders/{wid}/review")
+def wo_review(wid: int, r: Review):
+    try:
+        return _py(audit.review_work_order(wid, r.reviewer.strip(), r.approve, r.note.strip()))
+    except KeyError:
+        raise HTTPException(404, "unknown work order")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.get("/api/workorders")
+def wo_list():
+    return _py(audit.work_orders())
+
+
+@app.get("/api/audit")
+def audit_events(limit: int = 200):
+    return _py(audit.events(max(1, min(limit, 1000))))
 
 
 @app.get("/api/learn/template")

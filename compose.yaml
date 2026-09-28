@@ -1,0 +1,12 @@
+services:
+  welltwin:
+    build: .
+    image: welltwin:latest
+    ports: ["8765:8765"]
+    env_file:
+      - path: .env
+        required: false
+    volumes: [welltwin-state:/state]   # audit trail + work orders survive restarts
+    restart: unless-stopped
+volumes:
+  welltwin-state:

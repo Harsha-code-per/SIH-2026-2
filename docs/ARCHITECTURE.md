@@ -38,6 +38,15 @@
 | `field` | Each well: best in-envelope cycle by net value (oil − steam − power − risk × workover), or median practice. When a generator frees up, it goes to the ready well with max (cycle oil − cold decline oil over the remaining horizon) / (injection + rig move days). The practice baseline rotates wells in fixed order. |
 | `learn` | Validates columns, numeric ranges, duplicates, orphans and gaps; appends to `history.EXTRA`; clears the `twin.field`, `field.cycle_plan` and API caches; recalibrates; reports parameter/envelope/error deltas and plan-vs-actual using the SPM actually applied. |
 
+## Production layer
+| Piece | How it works |
+|---|---|
+| Heater (EDH) | Optional `heater_kw` input to `simulate`: thermostatic, on while tubing fluid would be < 65 °C. ΔT = P / (ṁ·cp + UA_loss); energy counted in kWh. Exempt from the envelope because it is a known device, not reservoir extrapolation. |
+| CO₂ | steam t × 0.075 + kWh × 0.00071 (gas-fired OTSG; CEA grid factor), on strategies, baseline, what-if and field totals. |
+| `/api/simulate` | One operating point with the same honesty rules as the optimizer: conformal band, doubled outside the envelope, plus mission checks. Drives the sandbox. |
+| `audit` | `events` + `work_orders` tables. Review requires a different person from the preparer. Live decisions, ingests and work-order actions are logged. |
+| Deploy | Multi-stage Dockerfile (node build → python slim), `compose.yaml` with a state volume and healthcheck; CI runs the self-check, UI build and image build. |
+
 ## Honest limits
 - Lumped single-zone thermal model. Upgrade path: train on CMG STARS runs and swap exhaustive search for Bayesian optimization.
 - Failure hazard weights are hand-set (`ponytail:` note in code); refit on OIL's failure log.

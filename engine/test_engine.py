@@ -1,7 +1,10 @@
 """Engine self-check.  Run: .venv/bin/python -m engine.test_engine"""
 import numpy as np
 
-from . import dyno, field, learn, live, llm, optimize, params as P, physics as ph
+import tempfile
+from pathlib import Path
+
+from . import audit, dyno, field, learn, live, llm, optimize, params as P, physics as ph, twin
 
 
 def test():
@@ -53,6 +56,24 @@ def test():
 
     bad = [dict(r, steam_t="-5") for r in learn.parse_csv(learn.template()["cycles"])]
     assert not learn.ingest(bad, learn.parse_csv(learn.template()["daily"]), "test")["ok"]
+    w = twin.well_model("BGW-08", 10)
+    x = dict(res["baseline"]["x"], heater_kw=np.array([0.0, 20.0]))
+    h = ph.simulate(x, w, 240, controller=False)
+    assert h["float_days"][1] < h["float_days"][0] and h["cum_kwh"][1, -1] > h["cum_kwh"][0, -1], "heater trades energy for float"
+    assert rec["co2_t"] < res["baseline"]["co2_t"]
+
+    c2, d2 = learn.parse_xlsx(learn.template_xlsx())
+    assert c2[0]["well_id"] == "BGW-08" and d2[0]["day"] == "11"
+
+    audit.DB = Path(tempfile.mkdtemp()) / "audit.db"
+    wo = audit.create_work_order(res, "Engineer A")
+    try:
+        audit.review_work_order(wo["id"], "engineer a", True)
+        raise AssertionError("four-eyes rule not enforced")
+    except ValueError:
+        pass
+    assert audit.review_work_order(wo["id"], "Supervisor B", True)["status"] == "approved"
+    assert len(audit.events()) == 2
     print("engine OK")
 
 

@@ -51,3 +51,13 @@ MAX_FAILURE_RISK = 0.15
 WORKOVER_COST = 1_200_000.0  # rod-failure workover: rig, rods, lost production (ASSUMED)
 OIL_PRICE_PER_BBL = 5500.0   # ₹/bbl realised crude price (ASSUMED, ~$65)
 RIG_MOVE_D = 2.0             # days to move a steam generator between well pads (ASSUMED)
+
+# --- Downhole electric heater (EDH, in use at Baghewala per OIL) ---
+HEATER_MAX_KW = 60.0          # optional lever, not part of the historical envelope (a known device, not reservoir extrapolation)
+HEATER_LOSS_W_PER_K = 1000.0  # heat lost to the formation along the tubing (ASSUMED)
+FLUID_CP = 2500.0             # J/kg/K, oil-water mix
+
+# --- Emissions ---
+CO2_T_PER_T_STEAM = 0.075     # gas-fired once-through steam generator, ~75 kg CO2 per t steam (ASSUMED)
+CO2_T_PER_KWH = 0.00071       # Indian grid emission factor ~0.71 kg/kWh (CEA)
+HEATER_ON_BELOW_C = 65.0      # thermostatic: heater runs only while tubing fluid would be colder than this

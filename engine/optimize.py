@@ -14,6 +14,11 @@ ROUND = {"steam_t": 10, "inj_p_bar": 1, "soak_d": 0.5, "stroke_m": 0.1, "spm_max
 SERIES = ("t_res", "mu_tub", "oil", "cum", "spm", "safe_spm", "float_margin", "cum_kwh", "fillage")
 
 
+def co2(steam_t, kwh):
+    """Tonnes CO2: steam generation + grid power for the pump."""
+    return steam_t * P.CO2_T_PER_T_STEAM + kwh * P.CO2_T_PER_KWH
+
+
 def candidates(env, n=N_CANDIDATES, seed=7):
     """3/4 of the search inside the validated envelope, 1/4 exploring the full
     engineering bounds (so the operator sees what was considered and why it was refused)."""
@@ -108,6 +113,7 @@ def plan(m):
             sor=round(float(x["steam_t"][i] / (p50[i] * 0.159)), 2),  # m3 steam CWE / m3 oil
             energy_kwh=round(float(energy[i])), kwh_per_bbl=round(float(energy[i] / p50[i]), 1),
             cost_per_bbl=round(float(cost[i] / p50[i])), failure_risk=round(float(r["failure_risk"][i]), 3),
+            co2_t=round(float(co2(x["steam_t"][i], energy[i])), 1),
             float_days=int(r["float_days"][i]), in_envelope=bool(inside[i]),
             out_of_envelope=[k for k, b in bad.items() if b[i]],
             day_target=int(np.argmax(r["cum"][i] >= m["target_bbl"])) + 1 if (r["cum"][i] >= m["target_bbl"]).any() else None,
@@ -135,6 +141,7 @@ def plan(m):
                 prod_start=round(float(b["prod_start"][0]), 1), inj_days=round(float(b["inj_days"][0]), 1),
                 t_steam=round(float(b["t_steam"][0])), r_heated=round(float(b["r_heated"][0]), 1),
                 resteam_day=int(b["cutoff_day"][0]))
+    base["co2_t"] = round(float(co2(last["steam_t"][0], base["energy_kwh"])), 1)
     base["cost_per_bbl"] = round((last["steam_t"][0] * P.STEAM_COST_PER_T + base["energy_kwh"] * P.POWER_COST_PER_KWH
                                   + base["failure_risk"] * P.WORKOVER_COST) / base["p50"])
 
