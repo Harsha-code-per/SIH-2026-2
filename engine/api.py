@@ -66,10 +66,18 @@ def field():
     ))
 
 
+@lru_cache(maxsize=32)
+def _suggest(wid):
+    return optimize.suggest(wid)
+
+
+learn._invalidate.append(_suggest.cache_clear)
+
+
 @app.get("/api/wells/{wid}")
 def well(wid: str):
     _check(wid)
-    return _py(dict(twin.state(wid), cycles=twin.field()["twins"][wid]["cycles"]))
+    return _py(dict(twin.state(wid), cycles=twin.field()["twins"][wid]["cycles"], suggested=_suggest(wid)))
 
 
 @app.post("/api/parse")

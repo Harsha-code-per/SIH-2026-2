@@ -133,3 +133,6 @@ input.text { background: var(--bg); border: 1px solid var(--line); border-radius
   .print-area { position: absolute; inset: 0; border-radius: 0; }
   .no-print { display: none !important; }
 }
+
+select.well-select { background: transparent; border: 0; border-bottom: 1px dashed var(--line); color: var(--text); font: 700 30px var(--mono); margin-top: 6px; padding: 0 4px 2px 0; cursor: pointer; }
+select.well-select option { font-size: 14px; background: var(--panel); }

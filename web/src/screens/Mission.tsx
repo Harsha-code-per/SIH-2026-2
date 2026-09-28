@@ -50,7 +50,12 @@ export function MissionScreen({ well, field, mission, setMission, onRun, busy, a
     <div className="screen" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(300px, 1.1fr) minmax(320px, 1fr)', gap: 24, alignItems: 'stretch' }}>
       <section className="panel">
         <div className="label">Well</div>
-        <h2 className="mono" style={{ fontSize: 30, marginTop: 6 }}>{mission.well_id}</h2>
+        <select className="mono well-select" value={mission.well_id} aria-label="Well"
+          onChange={(e) => api.well(e.target.value).then((w) => setMission(w.suggested)).catch(() => {})}>
+          {(field?.wells ?? [{ well_id: mission.well_id, rod_failures: 0 }]).map((w) => (
+            <option key={w.well_id} value={w.well_id}>{w.well_id}</option>
+          ))}
+        </select>
         <div className="muted" style={{ marginTop: 2 }}>Baghewala · Jodhpur Sandstone · next: CSS cycle #{well?.next_cycle ?? '–'}</div>
         <hr className="rule" />
         <div className="label" style={{ marginBottom: 10 }}>Current well state</div>

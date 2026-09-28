@@ -56,6 +56,10 @@ def test():
 
     bad = [dict(r, steam_t="-5") for r in learn.parse_csv(learn.template()["cycles"])]
     assert not learn.ingest(bad, learn.parse_csv(learn.template()["daily"]), "test")["ok"]
+    for wid in twin.field()["twins"]:
+        s = optimize.plan(optimize.suggest(wid))
+        assert s["feasible"] and s["recommended"]["cost_per_bbl"] <= s["baseline"]["cost_per_bbl"], wid
+
     w = twin.well_model("BGW-08", 10)
     x = dict(res["baseline"]["x"], heater_kw=np.array([0.0, 20.0]))
     h = ph.simulate(x, w, 240, controller=False)

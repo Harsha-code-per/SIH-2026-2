@@ -15,7 +15,7 @@ export type Cycle = X & { cycle: number; cycle_days: number; cum_oil_bbl: number
 export type WellState = {
   well_id: string; next_cycle: number; cycles_done: number; reservoir_temp_c: number; tubing_visc_cp: number
   oil_rate_bopd: number; spm: number; float_margin: number; rod_failures: number
-  envelope: Record<keyof X, [number, number]>; cycles: Cycle[]; history_steam_t: [number, number]
+  envelope: Record<keyof X, [number, number]>; cycles: Cycle[]; history_steam_t: [number, number]; suggested: Mission
   anomalies: { cycle: number; anomaly_days: number; rod_failure: boolean; lead_days: number | null }[]
 }
 export type Plan = {
@@ -27,7 +27,10 @@ export type Plan = {
   evidence: { cycle: number; steam_t: number; inj_p_bar: number; soak_d: number; cum_oil_bbl: number; rod_failure: boolean; float_days: number }[]
   conformal_q: number; loco_mape: number; days: number
 }
-export type Field = { conformal_q: number; loco_mape: number; n_holdout: number; failures: number; failures_warned: number }
+export type Field = {
+  conformal_q: number; loco_mape: number; n_holdout: number; failures: number; failures_warned: number
+  wells: { well_id: string; cycles: number; rod_failures: number; last_cum_bbl: number }[]
+}
 export type Explanation = { text: string; source: 'llm' | 'template'; guard: string }
 
 export type Card = {

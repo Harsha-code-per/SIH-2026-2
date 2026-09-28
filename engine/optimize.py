@@ -80,13 +80,16 @@ def plan(m):
         ("target", "P10 production misses target by deadline", p10 >= m["target_bbl"]),
     ]
     alive, funnel = np.ones(len(p50), bool), []
+    best_p10 = 0.0
     for name, why, ok in gates:
+        if name == "target":  # best pessimistic outcome any safe, in-budget, validated plan can reach
+            best_p10 = float(p10[alive].max()) if alive.any() else 0.0
         funnel.append(dict(gate=name, reason=why, rejected=int((alive & ~ok).sum())))
         alive &= ok
     ok = {name: g for name, _, g in gates}
     feasible = alive
     if not feasible.any():
-        return dict(mission=m, feasible=False, funnel=funnel, n=len(p50),
+        return dict(mission=m, feasible=False, funnel=funnel, n=len(p50), best_p10=round(best_p10),
                     message="No strategy meets the mission inside the validated envelope. Relax target, deadline or budget.")
     score = np.where(feasible, cost / p50, np.inf)
     c = int(np.argmin(score))
@@ -165,9 +168,22 @@ def plan(m):
         f"✓ {int(feasible.sum()):,} feasible strategies remain",
         "Selected lowest cost per barrel with P10 ≥ target",
     ]
-    return dict(mission=m, feasible=True, n=len(p50), funnel=funnel, trace=trace, state=st,
+    return dict(mission=m, feasible=True, n=len(p50), funnel=funnel, trace=trace, state=st, best_p10=round(best_p10),
                 strategies=strategies, recommended=rec, baseline=base, evidence=evidence,
                 conformal_q=q, loco_mape=f["loco_mape"], days=DAYS)
+
+
+def suggest(wid):
+    """A stretch mission this well can meet: 95% of the best P10 any safe, in-budget, validated plan reaches."""
+    if wid == DEMO["well_id"]:
+        return dict(DEMO)
+    st = twin.state(wid)
+    cyc = twin.field()["twins"][wid]["cycles"]
+    x = {k: [float(np.median([c[k] for c in cyc]))] for k in P.DECISIONS}
+    r = simulate(x, twin.well_model(wid, st["next_cycle"]), DAYS, controller=False)
+    m = dict(well_id=wid, target_bbl=100.0, deadline_d=90.0, steam_budget_t=1000.0,
+             energy_budget_kwh=float(round(r["cum_kwh"][0, 89] * 1.2, -2)))
+    return dict(m, target_bbl=float(round(plan(m)["best_p10"] * 0.95, -1)))
 
 
 DEMO = dict(well_id="BGW-08", target_bbl=1600, deadline_d=90, steam_budget_t=1000, energy_budget_kwh=7000)
