@@ -1,5 +1,14 @@
 # Prototype video: script (≈150 s)
 
+**Fastest path: auto demo.** Open the app, press **`D`**, and record. Every screen plays itself:
+- the mission types itself and is parsed by Nemotron
+- the twin replays under typical practice to show rod float
+- Live Ops alerts are read, then approved
+- the Field Gantt flips to practice and back
+- the Learn step ingests the live cycle
+
+The full run takes about 2½ minutes; record the voiceover to match the table below. `Esc` stops.
+
 **Setup:**
 - Chrome in front (it must be the visible window, or animations pause), 1920×1080, fullscreen (F11), zoom 100%.
 - Run `make demo` (or `make up`) and open the app.

@@ -1,11 +1,17 @@
 import { motion } from 'motion/react'
+import { useAfter } from '../auto'
 import { WellScene } from '../WellScene'
 
 const full: React.CSSProperties = { height: '100%', display: 'grid', placeItems: 'center', position: 'relative', overflow: 'hidden', cursor: 'pointer' }
 
-export function Intro({ onNext }: { onNext: () => void }) {
+export function Intro({ onNext, onDemo, auto }: { onNext: () => void; onDemo: () => void; auto: boolean }) {
+  useAfter(auto, 6500, onNext)
   return (
     <div style={full} onClick={onNext}>
+      {!auto && (
+        <button className="btn ghost" style={{ position: 'absolute', right: 24, bottom: 20, fontSize: 11 }}
+          onClick={(e) => { e.stopPropagation(); onDemo() }}>▶ AUTO DEMO (D)</button>
+      )}
       <div style={{ position: 'absolute', inset: 0, opacity: 0.35, display: 'grid', placeItems: 'center' }}>
         <div style={{ height: '100%', aspectRatio: '520 / 660' }}><WellScene run={null} day={0} spmIdle={2} /></div>
       </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Scatter, XAxis, YAxis } from 'recharts'
 import { api, type Learned } from '../api'
+import { useAfter } from '../auto'
 
 const download = (name: string, text: string) => {
   const a = document.createElement('a')
@@ -10,7 +11,7 @@ const download = (name: string, text: string) => {
   URL.revokeObjectURL(a.href)
 }
 
-export function LearnScreen({ onNext }: { onNext: () => void }) {
+export function LearnScreen({ onNext, auto }: { onNext: () => void; auto: boolean }) {
   const [res, setRes] = useState<Learned | null>(null)
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
@@ -35,13 +36,16 @@ export function LearnScreen({ onNext }: { onNext: () => void }) {
     download('daily.csv', t.daily)
   }
 
+  useAfter(auto && !res && !busy, 2000, () => run('live', api.learnLive))
+  useAfter(auto && !!res?.ok, 8000, onNext)
+
   const b = res?.before
   const a = res?.after
   const pva = res?.plan_vs_actual
   const rows = pva ? pva.day.map((d, i) => ({ d, actual: pva.actual[i], before: pva.before[i], after: pva.after[i] })) : []
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
+    <div className="screen" style={{ display: 'grid', gap: 18, gridTemplateRows: 'auto auto minmax(330px, 1fr)' }}>
       <div className="panel" style={{ padding: '14px 20px' }}>
         <div className="label">Learning loop · shadow mode</div>
         <h2 style={{ fontSize: 22, marginTop: 4 }}>Every executed cycle makes the twin better.</h2>
@@ -59,9 +63,12 @@ export function LearnScreen({ onNext }: { onNext: () => void }) {
         <section className="panel" style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
           <div className="label">Source 2 · Your field data (CSV)</div>
           {(['cycles', 'daily'] as const).map((k) => (
-            <label key={k} className="mono" style={{ fontSize: 12, display: 'grid', gap: 4 }}>
-              <span className="muted">{k}.csv</span>
-              <input type="file" accept=".csv,text/csv" onChange={(e) => setFiles({ ...files, [k]: e.target.files?.[0] })} />
+            <label key={k} className="btn ghost" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <span>{k.toUpperCase()}.CSV</span>
+              <span className={files[k] ? 'cyan' : 'muted'} style={{ letterSpacing: 0, textTransform: 'none', fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {files[k]?.name ?? 'choose file…'}
+              </span>
+              <input type="file" hidden accept=".csv,text/csv" onChange={(e) => setFiles({ ...files, [k]: e.target.files?.[0] })} />
             </label>
           ))}
           <div style={{ display: 'flex', gap: 8 }}>
@@ -82,6 +89,17 @@ export function LearnScreen({ onNext }: { onNext: () => void }) {
         </section>
       </div>
 
+      {!(res?.ok && b && a) && (
+        <section className="panel" style={{ display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+          <div>
+            <div className="label">Waiting for an executed cycle</div>
+            <div className="mono muted" style={{ fontSize: 13, marginTop: 10, maxWidth: 560, lineHeight: 1.7 }}>
+              Finish a cycle in Live Ops and ingest it, or upload OIL's cycle + daily exports.<br />
+              You'll see what the twin learned, how its validated envelope changed, and its error before vs after.
+            </div>
+          </div>
+        </section>
+      )}
       {res?.ok && b && a && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 18 }}>
           <section className="panel">
@@ -108,9 +126,9 @@ export function LearnScreen({ onNext }: { onNext: () => void }) {
               </div>
             </div>
           </section>
-          <section className="panel" style={{ height: 330 }}>
+          <section className="panel" style={{ minHeight: 330, display: 'flex', flexDirection: 'column' }}>
             <div className="label">Plan vs actual · oil rate (bopd) · <span className="amber">actual</span> · <span className="muted">twin before</span> · <span className="cyan">twin after</span></div>
-            <ResponsiveContainer width="100%" height="92%">
+            <div style={{ flex: 1, minHeight: 280 }}><ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={rows} margin={{ top: 12, right: 10, bottom: 0, left: -12 }}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="d" type="number" domain={['dataMin', 'dataMax']} tickCount={8} />
@@ -119,7 +137,7 @@ export function LearnScreen({ onNext }: { onNext: () => void }) {
                 <Line dataKey="before" stroke="var(--muted)" strokeDasharray="5 4" dot={false} isAnimationActive={false} />
                 <Line dataKey="after" stroke="var(--cyan)" strokeWidth={2.5} dot={false} animationDuration={1200} />
               </ComposedChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer></div>
           </section>
         </div>
       )}

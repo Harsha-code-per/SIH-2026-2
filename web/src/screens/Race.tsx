@@ -2,12 +2,14 @@ import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { fmt, type Plan, type Strategy } from '../api'
+import { useAfter } from '../auto'
 
 const COLOR: Record<string, string> = { A: '#7f93a3', B: '#b39ddb', C: 'var(--cyan)', D: 'var(--amber)', E: 'var(--red)' }
 const PHASE_MS = [1400, 3200, 1800] // simulating → curves → table → envelope check
 
-export function RaceScreen({ plan, onNext }: { plan: Plan; onNext: () => void }) {
+export function RaceScreen({ plan, onNext, auto }: { plan: Plan; onNext: () => void; auto: boolean }) {
   const [phase, setPhase] = useState(0)
+  useAfter(auto && phase >= 3, 6500, onNext)
   useEffect(() => {
     if (phase >= PHASE_MS.length) return
     const id = setTimeout(() => setPhase((p) => p + 1), PHASE_MS[phase])
@@ -23,16 +25,21 @@ export function RaceScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
   const rec = plan.recommended
 
   return (
-    <div style={{ display: 'grid', gap: 20 }} onClick={() => phase < PHASE_MS.length && setPhase(phase + 1)}>
+    <div className="screen" style={{ display: 'grid', gap: 20, gridTemplateRows: 'auto minmax(330px, 1fr) auto' }} onClick={() => phase < PHASE_MS.length && setPhase(phase + 1)}>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${S.length}, 1fr)`, gap: 14 }}>
         {S.map((s) => <Card key={s.label} s={s} phase={phase} />)}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: phase >= 3 && e ? '1.3fr 1fr' : '1fr', gap: 20 }}>
-        <section className="panel" style={{ height: 330 }}>
-          <div className="label">Cumulative oil (bbl) vs mission · target {fmt(m.target_bbl)} bbl by day {m.deadline_d}</div>
+        <section className="panel" style={{ minHeight: 330, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="label">Cumulative oil (bbl) vs mission · target {fmt(m.target_bbl)} bbl by day {m.deadline_d}</div>
+            <div className="mono" style={{ marginLeft: 'auto', display: 'flex', gap: 10, fontSize: 11 }}>
+              {S.map((s) => <span key={s.label} style={{ color: COLOR[s.label], fontWeight: s.label === 'C' ? 700 : 400 }}>━ {s.label}</span>)}
+            </div>
+          </div>
           {phase >= 1 && (
-            <ResponsiveContainer width="100%" height="92%">
+            <div style={{ flex: 1, minHeight: 280 }}><ResponsiveContainer width="100%" height="100%">
               <LineChart data={data} margin={{ top: 14, right: 20, bottom: 0, left: 0 }}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="day" type="number" domain={[0, horizon]} tickCount={8} />
@@ -44,7 +51,7 @@ export function RaceScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
                     strokeDasharray={s.label === 'E' ? '6 4' : undefined} animationDuration={2600} animationEasing="linear" />
                 ))}
               </LineChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer></div>
           )}
         </section>
 

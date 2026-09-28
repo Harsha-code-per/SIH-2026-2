@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, fmt, type Field, type Mission, type WellState } from '../api'
+import { useAfter } from '../auto'
 import { WellScene } from '../WellScene'
 
 const FIELDS: [keyof Mission, string, string][] = [
@@ -9,11 +10,28 @@ const FIELDS: [keyof Mission, string, string][] = [
   ['energy_budget_kwh', 'SRP energy budget', 'kWh'],
 ]
 
-export function MissionScreen({ well, field, mission, setMission, onRun, busy }: {
-  well: WellState | null; field: Field | null; mission: Mission; setMission: (m: Mission) => void; onRun: () => void; busy: boolean
+const DEMO_TEXT = 'We need 1,600 barrels from this well in 90 days. Steam is limited to 1,000 tonnes and we have 7 MWh of power.'
+
+export function MissionScreen({ well, field, mission, setMission, onRun, busy, auto }: {
+  well: WellState | null; field: Field | null; mission: Mission; setMission: (m: Mission) => void; onRun: () => void; busy: boolean; auto: boolean
 }) {
   const [text, setText] = useState('')
   const [parsed, setParsed] = useState('')
+
+  // auto demo: type the mission, parse it, run it
+  useEffect(() => {
+    if (!auto) return
+    let i = 0
+    const id = setInterval(() => {
+      i += 2
+      setText(DEMO_TEXT.slice(0, i))
+      if (i >= DEMO_TEXT.length) clearInterval(id)
+    }, 28)
+    return () => clearInterval(id)
+  }, [auto])
+  const typed = auto && text === DEMO_TEXT
+  useAfter(typed && !parsed, 500, () => parse())
+  useAfter(typed && parsed.startsWith('Parsed'), 1600, onRun)
   const parse = async () => {
     if (!text.trim()) return
     setParsed('parsing…')
@@ -29,7 +47,7 @@ export function MissionScreen({ well, field, mission, setMission, onRun, busy }:
   const maxCum = Math.max(...(well?.cycles.map((c) => c.cum_oil_bbl) ?? [1]))
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(300px, 1.1fr) minmax(320px, 1fr)', gap: 24, alignItems: 'stretch' }}>
+    <div className="screen" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(300px, 1.1fr) minmax(320px, 1fr)', gap: 24, alignItems: 'stretch' }}>
       <section className="panel">
         <div className="label">Well</div>
         <h2 className="mono" style={{ fontSize: 30, marginTop: 6 }}>{mission.well_id}</h2>

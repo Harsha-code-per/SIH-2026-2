@@ -33,9 +33,9 @@ body {
 }
 button, input, textarea { font: inherit; color: inherit; }
 
-.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+.app { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
 .topbar {
-  display: flex; align-items: center; gap: 24px; padding: 12px 28px;
+  display: flex; align-items: center; gap: 24px; padding: 0 28px; height: 48px; box-sizing: border-box;
   border-bottom: 1px solid var(--line); background: rgba(8, 12, 16, 0.85); backdrop-filter: blur(6px);
 }
 .brand { font: 700 13px var(--mono); letter-spacing: 0.14em; }
@@ -52,7 +52,11 @@ button, input, textarea { font: inherit; color: inherit; }
   border: 1px solid rgba(244, 162, 97, 0.35); padding: 4px 8px; border-radius: 3px;
 }
 
-.stage { overflow: auto; padding: 28px; }
+.stage { overflow: auto; padding: 28px; display: flex; flex-direction: column; }
+/* screen roots grow to the bottom of the viewport so panels never stop halfway down */
+.fill { flex: 1 0 auto; }
+/* fixed-layout screens: exactly one viewport tall, rows share the space (recording frame) */
+.screen { height: calc(100vh - 48px - 56px); min-height: 680px; }
 .label { font: 600 11px var(--mono); letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 20px; }
 .mono { font-family: var(--mono); }
@@ -102,3 +106,6 @@ tr.struck td:not(:last-child) { text-decoration: line-through; text-decoration-c
 
 .recharts-cartesian-axis-tick-value { font: 10px var(--mono); fill: var(--muted); }
 .recharts-cartesian-grid line { stroke: var(--line); }
+
+table.compact td { padding: 6px 10px; }
+table.compact th { padding: 6px 10px; }

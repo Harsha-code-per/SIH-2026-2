@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { api, fmt, type FieldPlan, type Schedule } from '../api'
+import { useAfter } from '../auto'
 
 const pct = (a: number, b: number) => `${a >= b ? '+' : '−'}${Math.abs((100 * (a - b)) / b).toFixed(0)}%`
 
-export function FieldScreen({ onNext }: { onNext: () => void }) {
+export function FieldScreen({ onNext, auto }: { onNext: () => void; auto: boolean }) {
   const [gens, setGens] = useState(1)
   const [horizon, setHorizon] = useState(180)
   const [data, setData] = useState<FieldPlan | null>(null)
   const [view, setView] = useState<'welltwin' | 'practice'>('welltwin')
   const [err, setErr] = useState('')
+  const [flipped, setFlipped] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -17,6 +19,11 @@ export function FieldScreen({ onNext }: { onNext: () => void }) {
     api.fieldSchedule(gens, horizon).then((d) => live && setData(d)).catch((e) => setErr(String(e)))
     return () => { live = false }
   }, [gens, horizon])
+
+  // auto demo: show WellTwin, flip to today's practice, back, move on
+  useAfter(auto && !!data && view === 'welltwin' && !flipped, 4500, () => { setView('practice'); setFlipped(true) })
+  useAfter(auto && view === 'practice', 3500, () => setView('welltwin'))
+  useAfter(auto && flipped && view === 'welltwin', 4000, onNext)
 
   if (!data) return <div className="panel mono muted">{err || 'Scheduling steam generators across the field…'}</div>
   const p = data.practice.kpi
@@ -27,7 +34,7 @@ export function FieldScreen({ onNext }: { onNext: () => void }) {
   const sched = data[view]
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
+    <div className="screen" style={{ display: 'grid', gap: 18, gridTemplateRows: 'auto auto minmax(250px, 1fr)' }}>
       <div className="panel" style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '14px 20px' }}>
         <div>
           <div className="label">Field twin · {Object.keys(sched.per_well).length} wells · shared steam generators</div>
@@ -43,7 +50,7 @@ export function FieldScreen({ onNext }: { onNext: () => void }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 18 }}>
         <section className="panel">
           <div className="label" style={{ marginBottom: 10 }}>Next {horizon} days · field totals</div>
-          <table>
+          <table className="compact">
             <thead><tr><th /><th>TODAY'S PRACTICE</th><th>WELLTWIN</th><th>CHANGE</th></tr></thead>
             <tbody>
               <tr><td>Oil</td><td>{fmt(p.oil_bbl)} bbl</td><td>{fmt(w.oil_bbl)} bbl</td><td className={w.oil_bbl >= p.oil_bbl ? 'ok' : 'amber'}>{pct(w.oil_bbl, p.oil_bbl)}</td></tr>
@@ -74,9 +81,9 @@ export function FieldScreen({ onNext }: { onNext: () => void }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18 }}>
-        <section className="panel" style={{ height: 250 }}>
+        <section className="panel" style={{ minHeight: 250, display: 'flex', flexDirection: 'column' }}>
           <div className="label">Field oil rate (bopd) · <span className="cyan">WellTwin</span> vs <span className="amber">today's practice</span></div>
-          <ResponsiveContainer width="100%" height="90%">
+          <div style={{ flex: 1, minHeight: 200 }}><ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="d" type="number" domain={[0, horizon]} tickCount={8} />
@@ -84,11 +91,11 @@ export function FieldScreen({ onNext }: { onNext: () => void }) {
               <Line dataKey="practice" stroke="var(--amber)" strokeDasharray="4 3" dot={false} isAnimationActive={false} />
               <Line dataKey="twin" stroke="var(--cyan)" strokeWidth={2.5} dot={false} animationDuration={1200} />
             </LineChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer></div>
         </section>
         <section className="panel">
           <div className="label" style={{ marginBottom: 10 }}>Priority queue · WellTwin</div>
-          <table>
+          <table className="compact">
             <thead><tr><th>#</th><th>WELL</th><th>START</th><th>STEAM</th><th>GAIN / GEN-DAY</th></tr></thead>
             <tbody>
               {data.welltwin.jobs.slice(0, 7).map((j, i) => (

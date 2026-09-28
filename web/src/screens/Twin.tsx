@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { api, fmt, type Card, type Plan } from '../api'
+import { useAfter } from '../auto'
 import { DynoCard } from '../DynoCard'
 import { phaseOf, WellScene, type Run } from '../WellScene'
 
 const DAYS_PER_SEC = 11
 const CHAIN = ['STEAM', 'HEAT', 'VISCOSITY ↓', 'FLOW ↑', 'SPM ADAPTS']
 
-export function TwinScreen({ plan, onNext }: { plan: Plan; onNext: () => void }) {
+export function TwinScreen({ plan, onNext, auto }: { plan: Plan; onNext: () => void; auto: boolean }) {
   const [mode, setMode] = useState<'plan' | 'practice'>('plan')
   const run: Run = mode === 'plan' ? plan.recommended : plan.baseline
   const end = Math.min(Math.max(plan.recommended.resteam_day, plan.baseline.resteam_day) + 10, plan.days - 1)
@@ -33,6 +34,10 @@ export function TwinScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
   }, [playing, end])
 
   const d = Math.max(0, Math.floor(day))
+  // auto demo: play the twin plan, then replay the late cycle under typical practice (rod float), then move on
+  const atEnd = !playing && day >= end
+  useAfter(auto && atEnd && mode === 'plan', 1500, () => { setMode('practice'); setDay(Math.max(end - 70, 0)); setPlaying(true) })
+  useAfter(auto && atEnd && mode === 'practice', 3500, onNext)
   const [card, setCard] = useState<Card | null>(null)
   const bucket = Math.floor(d / 6)
   useEffect(() => {
@@ -51,12 +56,12 @@ export function TwinScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
   })), [s, end])
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(360px, 1fr) minmax(420px, 1.15fr)', gap: 24 }}>
-      <section className="panel" style={{ padding: 0, overflow: 'hidden', height: 'calc(100vh - 140px)', minHeight: 560 }}>
+    <div className="screen" style={{ display: 'grid', gridTemplateColumns: 'minmax(360px, 1fr) minmax(420px, 1.15fr)', gap: 24 }}>
+      <section className="panel" style={{ padding: 0, overflow: 'hidden', minHeight: 560 }}>
         <WellScene run={run} day={day} />
       </section>
 
-      <section style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
+      <section style={{ display: 'grid', gap: 16, gridTemplateRows: 'auto auto auto auto minmax(230px, 1.3fr) minmax(165px, 1fr)' }}>
         <div className="panel" style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
           <div className="big">DAY {String(d).padStart(3, '0')}</div>
           <div className={`pill ${stage === 'INJECTION' ? 'cyan' : stage === 'SOAK' ? 'amber' : stage === 'RE-STEAM DUE' ? 'red' : 'ok'}`}>{stage}</div>
@@ -64,6 +69,7 @@ export function TwinScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
             <button className="btn ghost" onClick={() => { if (day >= end) setDay(0); setPlaying(!playing) }}>{playing ? '❚❚' : '▶'}</button>
             <button className={`btn ghost`} style={{ color: mode === 'plan' ? 'var(--cyan)' : 'var(--muted)' }} onClick={() => setMode('plan')}>TWIN PLAN</button>
             <button className={`btn ghost`} style={{ color: mode === 'practice' ? 'var(--amber)' : 'var(--muted)' }} onClick={() => setMode('practice')}>TYPICAL PRACTICE</button>
+            <button className="btn" style={{ padding: '8px 14px', fontSize: 12, marginLeft: 8 }} onClick={onNext}>COUNTERFACTUALS →</button>
           </div>
         </div>
         <input type="range" min={0} max={end} step={1} value={d} onChange={(e) => { setPlaying(false); setDay(Number(e.target.value)) }} style={{ width: '100%', accentColor: 'var(--cyan)' }} />
@@ -91,7 +97,7 @@ export function TwinScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div className="panel" style={{ height: 230 }}>
+        <div className="panel" style={{ minHeight: 230 }}>
           <div className="label">Reservoir temperature <span className="amber">(°C)</span> · tubing oil viscosity <span className="cyan">(cP, log)</span></div>
           <ResponsiveContainer width="100%" height="88%">
             <LineChart data={data} margin={{ top: 10, right: 0, bottom: 0, left: -10 }}>
@@ -105,13 +111,13 @@ export function TwinScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="panel" style={{ height: 230, padding: 14 }}>
+        <div className="panel" style={{ minHeight: 230, padding: 14 }}>
           <div className="label" style={{ marginBottom: 6 }}>Dynamometer cards · wave-equation solution</div>
           {producing ? <DynoCard card={card} stroke={(mode === 'plan' ? plan.recommended : plan.baseline).x.stroke_m} /> : <div className="mono muted" style={{ fontSize: 12 }}>pump idle during {stage.toLowerCase()}</div>}
         </div>
         </div>
 
-        <div className="panel" style={{ height: 165 }}>
+        <div className="panel" style={{ minHeight: 165 }}>
           <div className="label">Pump speed <span className="cyan">(SPM)</span> vs rod-float limit <span className="red">(safe SPM)</span></div>
           <ResponsiveContainer width="100%" height="88%">
             <LineChart data={data} margin={{ top: 10, right: 30, bottom: 0, left: -10 }}>
@@ -124,7 +130,6 @@ export function TwinScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <button className="btn" style={{ justifySelf: 'end' }} onClick={onNext}>RUN COUNTERFACTUALS →</button>
       </section>
     </div>
   )

@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Scatter, XAxis, YAxis } from 'recharts'
 import { api, fmt, type Alert, type Card, type Live, type Mission } from '../api'
+import { useAfter } from '../auto'
 import { DynoCard } from '../DynoCard'
 import { WellScene, type Run } from '../WellScene'
 
@@ -9,10 +10,10 @@ const TICK_MS = 260
 const ROD_W_KN = 25 // buoyant rod weight: min polished-rod load → measured float margin
 const HZ_PER_SPM = 50 / 6
 
-export function LiveScreen({ mission, onNext }: { mission: Mission; onNext: () => void }) {
+export function LiveScreen({ mission, onNext, auto }: { mission: Mission; onNext: () => void; auto: boolean }) {
   const [s, setS] = useState<Live | null>(null)
   const [playing, setPlaying] = useState(false)
-  const [speed, setSpeed] = useState(1)
+  const [speed, setSpeed] = useState(auto ? 3 : 1)
   const [card, setCard] = useState<Card | null>(null)
   const [err, setErr] = useState('')
 
@@ -30,6 +31,10 @@ export function LiveScreen({ mission, onNext }: { mission: Mission; onNext: () =
   useEffect(() => { if (bucket >= 0) api.liveDyno().then(setCard).catch(() => {}) }, [bucket])
 
   const decide = (a: Alert, approve: boolean) => api.liveDecide(a.id, approve).then((x) => { setS(x); setPlaying(true) })
+  // auto demo: give each alert time to be read, approve it, and move on when the cycle ends
+  const first = s?.alerts.find((a) => a.status === 'open')
+  useAfter(auto && !!first, first?.action ? 4500 : 3000, () => first && decide(first, true))
+  useAfter(auto && !!s?.complete, 3000, onNext)
 
   const end = s ? Math.min(Math.max(s.kpi.resteam_day, 110) + 8, s.plan.oil.length - 1) : 0
   const rows = useMemo(() => {
@@ -65,12 +70,12 @@ export function LiveScreen({ mission, onNext }: { mission: Mission; onNext: () =
   const closed = s.alerts.filter((a) => a.status !== 'open').slice().reverse()
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.75fr) minmax(460px, 1.45fr) minmax(320px, 1fr)', gap: 20 }}>
-      <section className="panel" style={{ padding: 0, overflow: 'hidden', height: 'calc(100vh - 140px)', minHeight: 560 }}>
+    <div className="screen" style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.75fr) minmax(460px, 1.45fr) minmax(320px, 1fr)', gap: 20 }}>
+      <section className="panel" style={{ padding: 0, overflow: 'hidden', minHeight: 560 }}>
         <WellScene run={run} day={s.day} />
       </section>
 
-      <section style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
+      <section style={{ display: 'grid', gap: 14, gridTemplateRows: 'auto auto auto minmax(210px, 1fr) minmax(210px, 1fr)' }}>
         <div className="panel" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
           <div>
             <div className="label">Live · {s.well_id} · CSS cycle #{s.cycle} · SCADA + dyno feed</div>
@@ -109,7 +114,7 @@ export function LiveScreen({ mission, onNext }: { mission: Mission; onNext: () =
           <Est k="cold rate" a={tw.planned_q_cold} b={tw.q_cold} u="bopd" />
         </div>
 
-        <div className="panel" style={{ height: 210 }}>
+        <div className="panel" style={{ minHeight: 210 }}>
           <div className="label">Oil rate (bopd) · <span className="amber">measured</span> · <span className="muted">plan</span> · <span className="cyan">twin forecast ± band</span></div>
           <ResponsiveContainer width="100%" height="90%">
             <ComposedChart data={rows} margin={{ top: 10, right: 8, bottom: 0, left: -18 }}>
@@ -125,7 +130,7 @@ export function LiveScreen({ mission, onNext }: { mission: Mission; onNext: () =
           </ResponsiveContainer>
         </div>
 
-        <div className="panel" style={{ height: 210 }}>
+        <div className="panel" style={{ minHeight: 210 }}>
           <div className="label">Rod float margin · <span className="amber">measured from dyno</span> · <span className="cyan">forecast</span> · issued SPM (right) · <span className="red">float below 1.0</span></div>
           <ResponsiveContainer width="100%" height="90%">
             <ComposedChart data={rows} margin={{ top: 10, right: 0, bottom: 0, left: -18 }}>
@@ -187,7 +192,7 @@ export function LiveScreen({ mission, onNext }: { mission: Mission; onNext: () =
             </div>
           ))}
         </div>
-        {s.complete && <button className="btn" onClick={onNext}>LEARN FROM THIS CYCLE →</button>}
+        {s.complete && <button className="btn" onClick={onNext}>FIELD STEAM PLAN →</button>}
       </section>
     </div>
   )

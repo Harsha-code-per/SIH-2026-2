@@ -97,7 +97,8 @@ make down      # stop
 make help      # all commands (test, demo, build, data, logs, …)
 ```
 
-Open **http://localhost:5199** and press `→` to walk Mission → Analyze → Digital Twin → Counterfactuals → Plan.
+Open **http://localhost:5199** and press `→` to walk Mission → Analyze → Digital Twin → Counterfactuals → Plan → Live Ops → Field → Learn.
+Press **`D`** (or ▶ AUTO DEMO) for a hands-free ~2½-minute run of the whole story, the one-take recording mode. `Esc` stops it.
 
 Optional LLM (works fully offline without it), in `.env` at the repo root:
 ```

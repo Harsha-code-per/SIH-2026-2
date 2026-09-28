@@ -22,6 +22,7 @@ description: Add or change a WellTwin UI screen or component (web/src) while kee
 - **Building blocks:** `.panel`, `.kv` (2-column key/value), `table` (right-aligned numerics), `.pill`, `.btn` / `.btn.ghost`, `.big`.
 - **Charts:** recharts `LineChart` inside `ResponsiveContainer` in a fixed-height `.panel`. Set `isAnimationActive={false}` for live-scrubbed charts and animate only reveal moments.
 - **Motion:** `motion/react` for entrances. Keep durations ≤ 0.8 s. Screens with timed reveals (Trace, Race) must also advance on click.
-- **Layout:** must fit 1920×1080 with no scroll (the video is recorded at that size). Check with claude-in-chrome `resize_window`.
+- **Layout:** fixed-layout screens use `className="screen"` (exactly one viewport tall; grid rows share the space, charts sit in flex/grid cells with `height: 100%`). Long screens (Plan) use `fill`. Everything must fit 1920×1080 with no scroll. Measure with `document.querySelector('.stage')` scrollHeight − clientHeight.
+- **Auto demo:** every screen takes `auto` and uses `useAfter(cond, ms, fn)` from `auto.ts` to play itself and call `onNext`. A new screen must do the same, or the one-take demo stalls.
 - **Honesty:** keep the SYNTHETIC HISTORY tag in the top bar. Any number on screen must come from the API, never be hard-coded.
 - **Verify:** `cd web && npx tsc -b`, then walk the flow (skill `run-and-verify`).

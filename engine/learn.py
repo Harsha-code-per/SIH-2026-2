@@ -129,6 +129,8 @@ def _reset_caches():
 
 
 def reset():
+    if not EXTRA["cycles"]:
+        return dict(ok=True)
     EXTRA["cycles"].clear()
     EXTRA["daily"].clear()
     _reset_caches()

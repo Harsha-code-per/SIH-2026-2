@@ -1,10 +1,12 @@
 import { motion } from 'motion/react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { fmt, type Explanation, type Plan } from '../api'
+import { useAfter } from '../auto'
 
 const pct = (a: number, b: number) => `${a >= b ? '+' : '−'}${Math.abs((100 * (a - b)) / b).toFixed(0)}%`
 
-export function PlanScreen({ plan, why, onNext }: { plan: Plan; why: Explanation | null; onNext: () => void }) {
+export function PlanScreen({ plan, why, onNext, auto }: { plan: Plan; why: Explanation | null; onNext: () => void; auto: boolean }) {
+  useAfter(auto, 11000, onNext)
   const r = plan.recommended
   const b = plan.baseline
   const m = plan.mission
@@ -23,11 +25,11 @@ export function PlanScreen({ plan, why, onNext }: { plan: Plan; why: Explanation
   ]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 24 }}>
-      <section style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
+    <div className="fill" style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 24 }}>
+      <section style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
         <div>
           <div className="label cyan">Recommended operating plan · {m.well_id} · CSS cycle #{plan.state.next_cycle}</div>
-          <h1 style={{ fontSize: 30, marginTop: 6 }}>Strategy C</h1>
+          <h1 style={{ fontSize: 26, marginTop: 4 }}>Strategy C</h1>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div className="panel">
@@ -45,7 +47,7 @@ export function PlanScreen({ plan, why, onNext }: { plan: Plan; why: Explanation
           <div className="panel">
             <div className="label" style={{ marginBottom: 12 }}>SRP · thermal-aware schedule</div>
             <div className="kv"><span>Stroke length</span><span>{r.x.stroke_m.toFixed(1)} m</span></div>
-            <table style={{ marginTop: 8 }}>
+            <table className="compact" style={{ marginTop: 8 }}>
               <thead><tr><th>FROM DAY</th><th>SPM</th><th>VFD</th></tr></thead>
               <tbody>
                 {r.spm_schedule.filter((_, i, a) => i === 0 || i === a.length - 1 || i % 2 === 0).map((s) => (
@@ -55,7 +57,7 @@ export function PlanScreen({ plan, why, onNext }: { plan: Plan; why: Explanation
             </table>
           </div>
         </div>
-        <div className="panel" style={{ height: 230 }}>
+        <div className="panel" style={{ height: 175 }}>
           <div className="label">SPM schedule <span className="cyan">(twin plan)</span> vs typical practice <span className="amber">(constant)</span> vs rod-float limit <span className="red">(safe SPM)</span></div>
           <ResponsiveContainer width="100%" height="90%">
             <LineChart data={data} margin={{ top: 12, right: 10, bottom: 0, left: -10 }}>
@@ -72,7 +74,7 @@ export function PlanScreen({ plan, why, onNext }: { plan: Plan; why: Explanation
           <div className="label" style={{ marginBottom: 10 }}>Why this plan</div>
           {why ? (
             <>
-              <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6 }}>{why.text}</p>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55 }}>{why.text}</p>
               <div className="mono muted" style={{ fontSize: 11, marginTop: 10 }}>
                 {why.source === 'llm' ? 'Written by NVIDIA Nemotron · every number verified against engine output' : 'Deterministic engine summary'}
               </div>
@@ -80,22 +82,19 @@ export function PlanScreen({ plan, why, onNext }: { plan: Plan; why: Explanation
           ) : <span className="mono muted">Explaining…</span>}
           <hr className="rule" />
           <div className="label" style={{ marginBottom: 8 }}>Evidence · closest past cycles of this well</div>
-          <table>
-            <thead><tr><th>CYCLE</th><th>STEAM</th><th>PRESSURE</th><th>SOAK</th><th>CUM OIL</th><th>ROD FLOAT DAYS</th></tr></thead>
-            <tbody>
-              {plan.evidence.map((e) => (
-                <tr key={e.cycle}>
-                  <td>#{e.cycle}</td><td>{fmt(e.steam_t)} t</td><td>{e.inj_p_bar} bar</td><td>{e.soak_d} d</td>
-                  <td>{fmt(e.cum_oil_bbl)} bbl</td>
-                  <td className={e.float_days ? 'red' : ''}>{e.float_days}{e.rod_failure ? ' · failure' : ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="mono" style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+            {plan.evidence.map((e) => (
+              <div key={e.cycle} style={{ display: 'grid', gridTemplateColumns: '42px 1fr auto', gap: 10 }}>
+                <span className="cyan">#{e.cycle}</span>
+                <span className="muted">{fmt(e.steam_t)} t · {e.inj_p_bar} bar · {e.soak_d} d soak → <span style={{ color: 'var(--text)' }}>{fmt(e.cum_oil_bbl)} bbl</span></span>
+                <span className={e.float_days ? 'red' : 'ok'}>{e.float_days ? `${e.float_days} float days${e.rod_failure ? ' · rod failure' : ''}` : 'no float'}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
+      <section style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
         <div className="panel">
           <div className="label">Expected outcome by day {m.deadline_d}</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginTop: 8 }}>
@@ -127,7 +126,7 @@ export function PlanScreen({ plan, why, onNext }: { plan: Plan; why: Explanation
 
         <div className="panel">
           <div className="label" style={{ marginBottom: 12 }}>vs this well's typical practice (median of past cycles, constant SPM)</div>
-          <table>
+          <table className="compact">
             <thead><tr><th /><th>TYPICAL PRACTICE</th><th>TWIN PLAN</th><th>CHANGE</th></tr></thead>
             <tbody>
               <tr><td>Oil by day {m.deadline_d}</td><td>{fmt(b.p50)} bbl</td><td>{fmt(r.p50)} bbl</td><td className={r.p50 >= b.p50 ? 'ok' : 'amber'}>{pct(r.p50, b.p50)}</td></tr>
