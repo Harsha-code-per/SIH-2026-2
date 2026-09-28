@@ -52,6 +52,11 @@ Steam heats the zone around the well, and the oil viscosity falls from ~12,000 c
   - −3% oil by day 90 while still meeting the target at P10
 - Anomaly model flags 8 of 28 historical rod failures 3–30 days ahead. We claim that as-is.
 
+### Operate modules (synthetic)
+- Live Ops (emulsion + faster-cooling scenario): cooling flagged day 34, drag day 66, **float forecast on day 70 for day 89**. Approve → 0 float days (25 forecast); reject → 31 float days.
+- Field scheduler (8 wells, 1 generator, 180 d), vs steaming in turn with usual settings: oil +2%, steam −17%, SOR 3.84 → 3.10, float days 100 → 0, expected rod failures 2.6 → 0, net value ₹7.27 → ₹8.32 cr (≈ half from sequencing, half from better cycle plans).
+- Learning loop: error on the newly ingested cycle 8.8% → 5.7%.
+
 ## 6. Honest limitations (say these before judges ask)
 - Synthetic data; `ASSUMED` parameters in `engine/params.py` need OIL data.
 - Lumped reservoir model (not a full thermal simulator). Upgrade path: CMG STARS runs as surrogate training data, with Bayesian optimization replacing exhaustive search.

@@ -15,7 +15,12 @@
 ## 3 · Solution & architecture
 - Operator mission (target, deadline, steam, energy) goes in; one executable CSS + SRP plan comes out.
 - Pipeline: data layer (existing CSV/Excel) → well-specific physics twin (Walther, Marx–Langenheim, Boberg–Lantz, rod-fall, Mills/Goodman) → history matching + conformal uncertainty + validated envelope → 4,096-strategy counterfactual search → constraint funnel → plan + evidence → Nemotron explanation behind a number guard.
-- Visual: architecture diagram + Plan-screen screenshot.
+- Then it keeps operating:
+  - **Live Ops**: tracking, 3-week float forecast, approve/reject SPM changes.
+  - **Dyno cards** from the wave equation.
+  - **Field steam scheduler**.
+  - **Learning loop**.
+- Visual: architecture diagram + Plan and Live Ops screenshots.
 
 ## 4 · Innovation / USP
 | We do | Others (XSPOC, CSS proxies, typical twins) |
@@ -25,6 +30,8 @@
 | **Knows its limits**: validated envelope, conformal P10–P90, evidence cycles | Point predictions, extrapolate silently |
 | **LLM can't invent numbers** (guarded) | LLM chat over data |
 | Laptop-class, offline-capable, no new sensors | Cloud SCADA platforms |
+| **Predictive, not reactive**: twin re-fits drift (cooling, emulsion drag) and warns weeks ahead | Alarms after the card already shows float |
+| **Field-level steam allocation** across wells | Per-well tools only |
 
 ## 5 · Feasibility & viability
 - Built and working: FastAPI + NumPy/SciPy/scikit-learn engine, React control room, NVIDIA NIM (Nemotron). 4,096 × 240-day simulations in ~0.3 s.
@@ -38,10 +45,14 @@
 
 ## 6 · Impact & benefits
 - On the prototype's synthetic history, the demo well vs its typical practice gives **−20% steam, −17% SOR, 0 vs 35 rod-float days, −32% cost/bbl**. Label these as model estimates.
+- Live Ops: float forecast 19 days ahead; approving the SPM change takes 25 forecast float days to 0.
+- Field (8 wells, 1 generator, 180 days): steam −17%, SOR 3.84 → 3.10, rod-float days 100 → 0, net value ₹7.27 → ₹8.32 cr.
+- Learning loop: error on a newly executed cycle 8.8% → 5.7% after recalibration.
 - Field level: fewer rod failures and workovers, lower SOR and energy/bbl, steam freed for more wells (only 19 of 33 were steamed last year).
 - Roadmap:
-  - Gibbs wave-equation dyno cards
-  - Fleet steam allocation across wells
-  - Refit failure hazard on OIL's failure log
+  - CNN card diagnosis on real OIL cards
+  - CMG STARS surrogate + Bayesian optimization
+  - OPC-UA/Modbus to SCADA and VFDs
+  - Role-based sign-off
   - Edge deployment at the well pad
 - References: SIH PS 26120; oil-india.com; SPE APOG 2023-535203; SPE J 28(03); Boberg & Lantz (1966); Marx & Langenheim (1959); API RP 11L; ChampionX XSPOC.

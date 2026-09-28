@@ -18,6 +18,10 @@ make data     # regenerate synthetic history (then re-check the demo story)
 - `engine/history.py`: synthetic field generator + CSV loader (`data/*.csv` schema = the real-data contract).
 - `engine/twin.py`: calibration, conformal error, validated envelope, anomalies. `field()` is cached; the API warms it at import.
 - `engine/optimize.py`: `plan(mission)` → funnel, strategies A–E, baseline, evidence, trace. `DEMO` is the video mission.
+- `engine/dyno.py`: Gibbs damped wave equation → surface/downhole cards (+ rule-based diagnosis).
+- `engine/live.py`: one global live session. The field = hidden truth + surprises (faster cooling, emulsion drag). The twin re-fits (q_cold, tau0, drag_c) with priors, forecasts, raises alerts; approved actions change the issued SPM.
+- `engine/field.py`: per-well best cycle (`cycle_plan`, cached) + generator list scheduling; `compare()` = practice vs sequencing-only vs WellTwin.
+- `engine/learn.py`: CSV contract validation, ingest into `history.EXTRA` (in-memory), cache reset + recalibration, plan-vs-actual.
 - `engine/llm.py`: NVIDIA NIM parse/explain + number guard + fallbacks.
 - `engine/api.py`: FastAPI routes under `/api`; serves `web/dist` if built.
 - `web/src/`: `App.tsx` stage machine; `screens/*` one file per stage; `WellScene.tsx` animated cross-section; `index.css` design tokens.
@@ -34,7 +38,8 @@ make data     # regenerate synthetic history (then re-check the demo story)
    - E is out of envelope on steam only.
    - The typical-practice baseline shows rod-float days.
 
-   `engine/test_engine.py` asserts most of this. Re-check it after any physics/data change.
+   Live Ops: float alert at least 7 days ahead; approving it gives 0 float days. Field: WellTwin net value > practice with 0 float days.
+   `engine/test_engine.py` asserts all of this. Re-check it after any physics/data change.
 5. **Laptop-class and offline-capable.** No new heavy dependencies without a reason; the demo must work without internet (LLM falls back).
 
 ## Conventions
