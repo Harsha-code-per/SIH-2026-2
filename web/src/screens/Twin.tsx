@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts'
-import { fmt, type Plan } from '../api'
+import { api, fmt, type Card, type Plan } from '../api'
+import { DynoCard } from '../DynoCard'
 import { phaseOf, WellScene, type Run } from '../WellScene'
 
 const DAYS_PER_SEC = 11
@@ -32,6 +33,14 @@ export function TwinScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
   }, [playing, end])
 
   const d = Math.max(0, Math.floor(day))
+  const [card, setCard] = useState<Card | null>(null)
+  const bucket = Math.floor(d / 6)
+  useEffect(() => {
+    if (d < run.prod_start) return
+    let live = true
+    api.dyno(plan.mission, mode, Math.min(bucket * 6 + 3, plan.days - 1)).then((c) => live && setCard(c)).catch(() => {})
+    return () => { live = false }
+  }, [bucket, mode, plan.mission, plan.days, run.prod_start]) // eslint-disable-line react-hooks/exhaustive-deps
   const s = run.series
   const stage = phaseOf(run, day)
   const lit = stage === 'INJECTION' ? 1 : stage === 'SOAK' ? 2 : 5
@@ -81,7 +90,8 @@ export function TwinScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
           <span>Cumulative energy</span><span>{fmt(s.cum_kwh[d])} kWh</span>
         </div>
 
-        <div className="panel" style={{ height: 165 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="panel" style={{ height: 230 }}>
           <div className="label">Reservoir temperature <span className="amber">(°C)</span> · tubing oil viscosity <span className="cyan">(cP, log)</span></div>
           <ResponsiveContainer width="100%" height="88%">
             <LineChart data={data} margin={{ top: 10, right: 0, bottom: 0, left: -10 }}>
@@ -94,6 +104,11 @@ export function TwinScreen({ plan, onNext }: { plan: Plan; onNext: () => void })
               <ReferenceLine yAxisId="t" x={d} stroke="#f5f7fa" strokeDasharray="3 3" />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+        <div className="panel" style={{ height: 230, padding: 14 }}>
+          <div className="label" style={{ marginBottom: 6 }}>Dynamometer cards · wave-equation solution</div>
+          {producing ? <DynoCard card={card} stroke={(mode === 'plan' ? plan.recommended : plan.baseline).x.stroke_m} /> : <div className="mono muted" style={{ fontSize: 12 }}>pump idle during {stage.toLowerCase()}</div>}
+        </div>
         </div>
 
         <div className="panel" style={{ height: 165 }}>

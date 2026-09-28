@@ -48,9 +48,11 @@ def card(spm, stroke_m, mu_cp, drag_c, fillage=1.0, strokes=3):
         lap = (u[2:] - 2 * u[1:-1] + u[:-2]) / (dx * dx)
         new[1:-1] = 2 * u[1:-1] - u_old[1:-1] + k * (ea * lap - c * (u[1:-1] - u_old[1:-1]) / dt + m * G_B)
 
-        # pump boundary: fluid load on upstroke; on downstroke it stays until the plunger hits liquid
+        # pump boundary: fluid load on upstroke; on downstroke it stays until the plunger hits liquid.
+        # Stroke direction follows the carrier delayed by the stress-wave travel time (the plunger's
+        # own velocity rings too much to use).
         v_p = (u[-1] - u_old[-1]) / dt
-        up = v_p < 0
+        up = np.sin(w * (t - L / a)) < 0
         if up and not prev_up:
             fluid_on = True
         if not up and prev_up:

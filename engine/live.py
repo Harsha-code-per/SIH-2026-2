@@ -48,7 +48,7 @@ def start(mission=None):
         noise_oil=rng.lognormal(0, 0.05, DAYS), noise_load=rng.normal(1, 0.03, DAYS),
         alerts=[], log=[dict(day=0, kind="info", text=f"Work order issued: {rec['x']['steam_t']:.0f} t steam, "
                                                        f"SPM schedule {rec['spm_schedule'][0]['spm']} → {rec['spm_schedule'][-1]['spm']}")],
-        fitted=None, float_seen=0,
+        fitted=None, float_seen=0, actions={},
     )
     return snapshot()
 
@@ -87,8 +87,9 @@ def _track(days, oil, load_kn):
 
 def _alert(kind, text, **kw):
     if any(a["kind"] == kind and a["status"] == "open" for a in S["alerts"]):
-        return
+        return None
     S["alerts"].append(dict(id=len(S["alerts"]) + 1, day=S["day"], kind=kind, text=text, status="open", **kw))
+    return S["alerts"][-1]
 
 
 def step(n=1):
@@ -133,11 +134,13 @@ def _daily():
         chk = simulate(S["x"], fit, DAYS, controller=False, spm_override=new)
         now, to = S["issued"][d + 1], new[d + 1]
         when = "Rods are floating now" if floats[0] <= d + 1 else f"Rods forecast to float on day {floats[0]} (in {floats[0] - d} d)"
-        _alert("float", f"{when} at the current work order. "
+        made = _alert("float", f"{when} at the current work order. "
                         f"Reduce SPM {now:.2f} → {to:.2f} (VFD {now / P.SPM_PER_HZ:.0f} → {to / P.SPM_PER_HZ:.0f} Hz) and follow the "
                         f"updated step-down. Float days: {int(f['float_days'][0])} → {int(chk['float_days'][0])}; oil change "
                         f"{chk['cum'][0, -1] - f['cum'][0, -1]:+,.0f} bbl.",
-               severity="critical" if floats[0] <= d + 1 else "warning", action=new.tolist(), float_day=int(floats[0]))
+               severity="critical" if floats[0] <= d + 1 else "warning", action=True, float_day=int(floats[0]))
+        if made:
+            S["actions"][made["id"]] = new
     drag_dev = fit["drag_c"] / S["planned"]["drag_c"] - 1
     if drag_dev > 0.25 and not any(a["kind"] == "drag" for a in S["alerts"]):
         _alert("drag", f"Dyno loads show rod drag {drag_dev * 100:.0f}% above this well's history: tubing fluid is more "
@@ -152,7 +155,7 @@ def decide(alert_id, approve):
     a["status"] = "approved" if approve else "rejected"
     a["decided"] = S["day"]
     if approve and a.get("action"):
-        S["issued"] = np.array(a["action"], float)
+        S["issued"] = S["actions"][alert_id]
     S["log"].append(dict(day=S["day"], kind="decision", text=f"Operator {a['status']}: {a['text'].split('.')[0]}"))
     return snapshot()
 

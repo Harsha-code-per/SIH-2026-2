@@ -17,7 +17,7 @@ export function Intro({ onNext }: { onNext: () => void }) {
           What if we could test an oil-production strategy <span className="cyan">before</span> applying it to the real well?
         </motion.h1>
         <motion.div className="mono muted" style={{ marginTop: 28, fontSize: 12, letterSpacing: '0.14em' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2 }}>
-          SIH26120 · OIL INDIA LIMITED · BAGHEWALA HEAVY-OIL FIELD
+          SIH26120 · OIL INDIA LIMITED · BAGHEWALA HEAVY-OIL FIELD · TEAM KAIHATSU
         </motion.div>
       </div>
     </div>
@@ -36,6 +36,9 @@ export function Outro({ onBack }: { onBack: () => void }) {
         </motion.h1>
         <motion.div className="mono muted" style={{ marginTop: 44, fontSize: 13, letterSpacing: '0.16em' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2.6 }}>
           SIH26120 — WELL-TO-SURFACE OPTIMIZATION OF CSS + SRP
+        </motion.div>
+        <motion.div className="mono" style={{ marginTop: 14, fontSize: 13, letterSpacing: '0.16em', color: 'var(--text)' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 3.2 }}>
+          TEAM KAIHATSU · R.M.K. COLLEGE OF ENGINEERING AND TECHNOLOGY
         </motion.div>
       </div>
     </div>

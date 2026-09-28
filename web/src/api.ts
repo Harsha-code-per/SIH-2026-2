@@ -1,6 +1,6 @@
 export type X = { steam_t: number; inj_p_bar: number; soak_d: number; stroke_m: number; spm_max: number }
 export type Mission = { well_id: string; target_bbl: number; deadline_d: number; steam_budget_t: number; energy_budget_kwh: number }
-export type Series = Record<'t_res' | 'mu_tub' | 'oil' | 'cum' | 'spm' | 'safe_spm' | 'float_margin' | 'cum_kwh', number[]>
+export type Series = Record<'t_res' | 'mu_tub' | 'oil' | 'cum' | 'spm' | 'safe_spm' | 'float_margin' | 'cum_kwh' | 'fillage', number[]>
 
 export type Strategy = {
   label: string; verdict: string; x: X; p10: number; p50: number; p90: number; sor: number
@@ -30,6 +30,40 @@ export type Plan = {
 export type Field = { conformal_q: number; loco_mape: number; n_holdout: number; failures: number; failures_warned: number }
 export type Explanation = { text: string; source: 'llm' | 'template'; guard: string }
 
+export type Card = {
+  surface: [number, number][]; downhole: [number, number][]; separated: boolean[]
+  peak_kn: number; min_kn: number; downhole_stroke_m: number; diagnosis: string
+}
+export type Alert = {
+  id: number; day: number; kind: 'cooling' | 'drag' | 'float'; text: string; status: 'open' | 'approved' | 'rejected'
+  severity: 'info' | 'warning' | 'critical'; action: number[] | null; float_day?: number
+}
+export type Live = {
+  well_id: string; cycle: number; day: number; stage: string; mission: Mission; x: X
+  prod_start: number; inj_days: number; t_steam: number; r_heated: number
+  truth_now: { t_res: number; mu_tub: number; spm: number; float_margin: number; oil: number }
+  observed: { day: number[]; oil: number[]; min_load_kn: number[]; spm: number[] }
+  plan: { oil: number[]; cum: number[]; float_margin: number[]; spm: number[] }
+  forecast: { day: number[]; oil: number[]; lo: number[]; hi: number[]; float_margin: number[] }
+  issued_spm: number[]
+  twin: { q_cold: number; tau0: number; drag_c: number; planned_q_cold: number; planned_tau0: number; planned_drag_c: number }
+  kpi: { cum_oil: number; forecast_at_deadline: number; float_days: number; resteam_day: number; cum_kwh: number }
+  alerts: Alert[]; log: { day: number; kind: string; text: string }[]; complete: boolean
+}
+export type Job = { well_id: string; generator: number; start: number; inj_days: number; steam_t: number; cycle_end: number; gain_per_gen_day: number; x: X }
+export type Schedule = {
+  jobs: Job[]; field_oil: number[]; per_well: Record<string, number[]>; generators: number; horizon: number
+  kpi: { oil_bbl: number; steam_t: number; sor: number; wells_steamed: number; cycles: number; float_days: number; expected_failures: number; net_value_cr: number }
+}
+export type FieldPlan = { practice: Schedule; sequencing_only: Schedule; welltwin: Schedule }
+export type Issue = { level: 'ok' | 'warning' | 'error'; file: string; msg: string }
+export type TwinSnap = { theta: { q_cold: number; tau0: number; drag_c: number; deg: number }; envelope: Record<keyof X, [number, number]>; cycles: number; conformal_q: number; loco_mape: number }
+export type Learned = {
+  ok: boolean; issues: Issue[]; source?: string; well_id?: string; cycle?: number; before?: TwinSnap; after?: TwinSnap
+  plan_vs_actual?: { day: number[]; actual: number[]; before: number[]; after: number[] }
+  cum_error_before?: number; cum_error_after?: number
+}
+
 async function call<T>(path: string, body?: unknown): Promise<T> {
   const r = await fetch(`/api/${path}`, body === undefined ? undefined : {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
@@ -44,6 +78,16 @@ export const api = {
   parse: (text: string, well_id: string) => call<{ mission: Mission; defaulted: string[]; source: string }>('parse', { text, well_id }),
   mission: (m: Mission) => call<Plan>('mission', m),
   explain: (m: Mission) => call<Explanation>('explain', m),
+  dyno: (mission: Mission, mode: 'plan' | 'practice', day: number) => call<Card>('dyno', { mission, mode, day }),
+  liveStart: (m: Mission) => call<Live>('live/start', m),
+  liveStep: (days: number) => call<Live>(`live/step?days=${days}`, {}),
+  liveDecide: (alert_id: number, approve: boolean) => call<Live>('live/decide', { alert_id, approve }),
+  liveDyno: () => call<Card>('live/dyno'),
+  fieldSchedule: (generators: number, horizon: number) => call<FieldPlan>(`field/schedule?generators=${generators}&horizon=${horizon}`),
+  learnLive: () => call<Learned>('learn/ingest-live', {}),
+  learnUpload: (cycles_csv: string, daily_csv: string) => call<Learned>('learn/upload', { cycles_csv, daily_csv }),
+  learnReset: () => call<{ ok: boolean }>('learn/reset', {}),
+  learnTemplate: () => call<{ cycles: string; daily: string }>('learn/template'),
 }
 
 export const fmt = (n: number, d = 0) => n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })

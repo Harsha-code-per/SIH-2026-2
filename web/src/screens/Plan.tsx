@@ -141,7 +141,7 @@ export function PlanScreen({ plan, why, onNext }: { plan: Plan; why: Explanation
           </table>
           <div className="mono muted" style={{ fontSize: 10, marginTop: 8 }}>* steam ₹2,500/t + power ₹9/kWh + failure risk × ₹12 lakh workover (assumed rates). Model estimates on synthetic history.</div>
         </div>
-        <button className="btn" style={{ justifySelf: 'end' }} onClick={onNext}>FINISH →</button>
+        <button className="btn" style={{ justifySelf: 'end' }} onClick={onNext}>OPERATE THIS PLAN LIVE →</button>
       </section>
     </div>
   )
