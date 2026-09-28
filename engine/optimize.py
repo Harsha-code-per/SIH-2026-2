@@ -11,7 +11,7 @@ from .physics import simulate
 
 N_CANDIDATES = 4096
 ROUND = {"steam_t": 10, "inj_p_bar": 1, "soak_d": 0.5, "stroke_m": 0.1, "spm_max": 0.1}
-SERIES = ("t_res", "mu_tub", "oil", "cum", "spm", "safe_spm", "float_margin", "cum_kwh")
+SERIES = ("t_res", "mu_tub", "oil", "cum", "spm", "safe_spm", "float_margin", "cum_kwh", "fillage")
 
 
 def candidates(env, n=N_CANDIDATES, seed=7):

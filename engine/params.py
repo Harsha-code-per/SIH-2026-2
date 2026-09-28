@@ -49,3 +49,5 @@ STEAM_COST_PER_T = 2500.0  # fuel + water treatment per tonne CWE
 POWER_COST_PER_KWH = 9.0
 MAX_FAILURE_RISK = 0.15
 WORKOVER_COST = 1_200_000.0  # rod-failure workover: rig, rods, lost production (ASSUMED)
+OIL_PRICE_PER_BBL = 5500.0   # ₹/bbl realised crude price (ASSUMED, ~$65)
+RIG_MOVE_D = 2.0             # days to move a steam generator between well pads (ASSUMED)

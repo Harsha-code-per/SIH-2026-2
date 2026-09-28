@@ -68,13 +68,18 @@ def _read(name):
                 for r in csv.DictReader(f)]
 
 
+# Cycles ingested at runtime by the learning loop (engine/learn.py).
+# ponytail: in-memory overlay, lost on restart; append to data/*.csv once a real data store exists
+EXTRA = {"cycles": [], "daily": []}
+
+
 def load():
     """Returns (wells, cycles, daily) as lists of dicts; generates synthetic data on first run."""
     if not (DATA / "cycles.csv").exists():
         DATA.mkdir(exist_ok=True)
         for name, rows in zip(("wells.csv", "cycles.csv", "daily.csv"), _generate()):
             _write(name, rows)
-    return _read("wells.csv"), _read("cycles.csv"), _read("daily.csv")
+    return _read("wells.csv"), _read("cycles.csv") + EXTRA["cycles"], _read("daily.csv") + EXTRA["daily"]
 
 
 if __name__ == "__main__":

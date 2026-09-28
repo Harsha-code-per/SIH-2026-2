@@ -146,4 +146,4 @@ The twin must recover each well from that history, exactly as it would from real
 
 ## Team
 
-SIH 2026 · Team ________ · College ________
+**Team Kaihatsu** · R.M.K. College of Engineering and Technology · SIH 2026

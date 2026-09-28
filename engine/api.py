@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import llm, optimize, params as P, twin
+from . import dyno, field as fieldsched, learn, live, llm, optimize, params as P, twin
 from .history import DAYS
 from .physics import simulate
 
@@ -48,6 +48,9 @@ def _check(wid):
 @lru_cache(maxsize=64)
 def _plan(key):
     return optimize.plan(dict(key))
+
+
+learn._invalidate.append(_plan.cache_clear)
 
 
 @app.get("/api/field")
@@ -100,6 +103,100 @@ def what_if(w: WhatIf):
     return _py(dict({k: np.round(r[k][0], 2) for k in optimize.SERIES}, in_envelope=bool(inside[0]),
                     out_of_envelope=[k for k, b in bad.items() if b[0]], float_days=r["float_days"][0],
                     failure_risk=r["failure_risk"][0], prod_start=r["prod_start"][0], r_heated=r["r_heated"][0]))
+
+
+class DynoReq(BaseModel):
+    mission: Mission = Mission()
+    mode: str = Field("plan", pattern="^(plan|practice)$")
+    day: int = Field(60, ge=0, lt=DAYS)
+
+
+@app.post("/api/dyno")
+def dyno_card(q: DynoReq):
+    """Surface + downhole card at one day of the recommended plan or typical practice."""
+    _check(q.mission.well_id)
+    res = _plan(tuple(sorted(q.mission.model_dump().items())))
+    run = res["recommended"] if q.mode == "plan" else res["baseline"]
+    s = run["series"]
+    spm = s["spm"][q.day] or run["x"]["spm_max"]
+    fill = min(max(s["fillage"][q.day], 0.2), 1.0)
+    return _py(dyno.card(spm, run["x"]["stroke_m"], s["mu_tub"][q.day], res["state"]["calibrated"]["drag_c"], fill))
+
+
+# --- live operations ---
+class Decision(BaseModel):
+    alert_id: int
+    approve: bool
+
+
+@app.post("/api/live/start")
+def live_start(m: Mission = Mission()):
+    _check(m.well_id)
+    return _py(live.start(m.model_dump()))
+
+
+@app.post("/api/live/step")
+def live_step(days: int = 1):
+    return _py(live.step(max(1, min(days, 30))))
+
+
+@app.post("/api/live/decide")
+def live_decide(d: Decision):
+    if not live.S:
+        raise HTTPException(409, "no live session")
+    return _py(live.decide(d.alert_id, d.approve))
+
+
+@app.get("/api/live/dyno")
+def live_dyno():
+    if not live.S:
+        raise HTTPException(409, "no live session")
+    return _py(live.dyno_now())
+
+
+# --- field steam scheduler ---
+@lru_cache(maxsize=16)
+def _field_compare(generators, horizon):
+    return fieldsched.compare(generators, horizon)
+
+
+learn._invalidate.append(_field_compare.cache_clear)
+
+
+@app.get("/api/field/schedule")
+def field_schedule(generators: int = 1, horizon: int = 180):
+    if not (1 <= generators <= 4 and 60 <= horizon <= 365):
+        raise HTTPException(422, "generators 1–4, horizon 60–365 days")
+    return _py(_field_compare(generators, horizon))
+
+
+# --- learning loop ---
+class Upload(BaseModel):
+    cycles_csv: str = Field(max_length=2_000_000)
+    daily_csv: str = Field(max_length=20_000_000)
+
+
+@app.post("/api/learn/ingest-live")
+def learn_live():
+    if not live.S or not live.snapshot()["complete"]:
+        raise HTTPException(409, "run the live cycle to the re-steam trigger first")
+    cyc, daily = live.as_history()
+    return _py(learn.ingest([cyc], daily, "live operations"))
+
+
+@app.post("/api/learn/upload")
+def learn_upload(u: Upload):
+    return _py(learn.ingest(learn.parse_csv(u.cycles_csv), learn.parse_csv(u.daily_csv), "csv upload"))
+
+
+@app.post("/api/learn/reset")
+def learn_reset():
+    return _py(learn.reset())
+
+
+@app.get("/api/learn/template")
+def learn_template():
+    return learn.template()
 
 
 _dist = Path(__file__).resolve().parent.parent / "web" / "dist"

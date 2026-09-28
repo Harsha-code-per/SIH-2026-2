@@ -99,13 +99,15 @@ def rod_mechanics(spm, stroke_m, mu_cp, drag_c):
     return float_margin, goodman, friction_kw
 
 
-def simulate(x, well, days=180, controller=True):
+def simulate(x, well, days=180, controller=True, spm_override=None):
     """Simulate one CSS cycle for N candidate strategies at once.
 
     x: dict of arrays (params.DECISIONS). well: dict with q_cold, skin, tau0,
     drag_c, deg (per-cycle decline), cycle (cycle number).
     controller=True  → thermal-aware SPM schedule (our system)
     controller=False → constant SPM at spm_max (current manual practice)
+    spm_override: (days,) or (N, days) SPM actually applied; NaN keeps the rule above.
+        Used for issued work orders and operator changes mid-cycle.
     Returns dict of (N, days) arrays + (N,) summaries.
     """
     steam, p, soak, stroke, spm_max = (np.atleast_1d(np.asarray(x[k], float)) for k in P.DECISIONS)
@@ -135,6 +137,9 @@ def simulate(x, well, days=180, controller=True):
         spm = np.clip(np.minimum.reduce([ceiling, fill, limit]), P.MIN_SPM, ceiling)
     else:
         spm = ceiling.copy()
+    if spm_override is not None:
+        ov = np.broadcast_to(np.asarray(spm_override, float), t.shape)
+        spm = np.where(np.isnan(ov), spm, ov)
     cap = per_spm[:, None] * spm * ev
     fillage = gross_in / cap
     oil = np.where(on, np.minimum(gross_in, cap) * (1 - wc), 0.0)

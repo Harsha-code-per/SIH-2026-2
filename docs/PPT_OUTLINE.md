@@ -2,7 +2,7 @@
 
 ## 1 · Title
 - **WellTwin: Mission-driven digital twin for coupled CSS + SRP optimization**
-- PS SIH26120 · Oil India Limited · Software · Smart Automation · Team name / college
+- PS SIH26120 · Oil India Limited · Software · Smart Automation · Team Kaihatsu · R.M.K. College of Engineering and Technology
 - Tagline: *Don't experiment on the well. Experiment on its digital twin first.*
 
 ## 2 · Problem & pain

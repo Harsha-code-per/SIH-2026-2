@@ -1,7 +1,7 @@
 """Engine self-check.  Run: .venv/bin/python -m engine.test_engine"""
 import numpy as np
 
-from . import llm, optimize, params as P, physics as ph
+from . import dyno, field, learn, live, llm, optimize, params as P, physics as ph
 
 
 def test():
@@ -33,6 +33,26 @@ def test():
     assert not llm.guard("Expect 2,345 bbl at 777 bar.", facts)
     assert llm._regex_parse("1,600 barrels in 90 days, 1000 t steam, 6.5 MWh") == dict(
         target_bbl=1600, deadline_d=90, steam_budget_t=1000, energy_budget_kwh=6500)
+    assert "ROD FLOAT" in dyno.card(3.3, 2.5, 21000, 4.0)["diagnosis"]
+    assert "NORMAL" in dyno.card(3.3, 2.5, 50, 4.0)["diagnosis"]
+    assert "FLUID POUND" in dyno.card(3.3, 2.5, 300, 4.0, fillage=0.5)["diagnosis"]
+
+    live.start()
+    warned = None
+    while not (snap := live.step(2))["complete"]:
+        for a in snap["alerts"]:
+            if a["status"] == "open":
+                warned = warned or (a["kind"] == "float" and a["float_day"] - snap["day"])
+                live.decide(a["id"], True)
+    assert warned and warned >= 7, f"float alert lead time {warned} d"
+    assert snap["kpi"]["float_days"] == 0, "approved alerts must prevent rod float"
+
+    c = field.compare(1)
+    assert c["welltwin"]["kpi"]["net_value_cr"] > c["practice"]["kpi"]["net_value_cr"]
+    assert c["welltwin"]["kpi"]["float_days"] == 0
+
+    bad = [dict(r, steam_t="-5") for r in learn.parse_csv(learn.template()["cycles"])]
+    assert not learn.ingest(bad, learn.parse_csv(learn.template()["daily"]), "test")["ok"]
     print("engine OK")
 
 
