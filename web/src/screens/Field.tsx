@@ -7,6 +7,9 @@ const pct = (a: number, b: number) => `${a >= b ? '+' : '−'}${Math.abs((100 * 
 
 export function FieldScreen({ onNext, auto }: { onNext: () => void; auto: boolean }) {
   const [gens, setGens] = useState(1)
+  const [maint, setMaint] = useState('')
+  const [outage, setOutage] = useState('')
+  const [applied, setApplied] = useState({ maint: '', outage: '' })
   const [horizon, setHorizon] = useState(180)
   const [data, setData] = useState<FieldPlan | null>(null)
   const [view, setView] = useState<'welltwin' | 'practice'>('welltwin')
@@ -16,9 +19,9 @@ export function FieldScreen({ onNext, auto }: { onNext: () => void; auto: boolea
   useEffect(() => {
     let live = true
     setErr('')
-    api.fieldSchedule(gens, horizon).then((d) => live && setData(d)).catch((e) => setErr(String(e)))
+    api.fieldSchedule(gens, horizon, applied.maint, applied.outage).then((d) => live && setData(d)).catch((e) => setErr(e instanceof Error ? e.message : String(e)))
     return () => { live = false }
-  }, [gens, horizon])
+  }, [gens, horizon, applied])
 
   // auto demo: show WellTwin, flip to today's practice, back, move on
   useAfter(auto && !!data && view === 'welltwin' && !flipped, 4500, () => { setView('practice'); setFlipped(true) })
@@ -42,6 +45,15 @@ export function FieldScreen({ onNext, auto }: { onNext: () => void; auto: boolea
         </div>
         <Picker label="Steam generators" value={gens} options={[1, 2, 3]} onChange={setGens} />
         <Picker label="Horizon (days)" value={horizon} options={[120, 180, 365]} onChange={setHorizon} />
+        <div>
+          <div className="label" style={{ fontSize: 10, marginBottom: 4 }}>Constraints</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input className="text" style={{ minWidth: 150 }} placeholder="maintenance e.g. 1:40-60" value={maint} onChange={(e) => setMaint(e.target.value)} aria-label="Generator maintenance windows" />
+            <input className="text" style={{ minWidth: 150 }} placeholder="well outage e.g. BGW-03:0-30" value={outage} onChange={(e) => setOutage(e.target.value)} aria-label="Well outage windows" />
+            <button className="btn ghost" onClick={() => setApplied({ maint, outage })}>APPLY</button>
+          </div>
+          {err && <div className="mono red" style={{ fontSize: 11, marginTop: 4 }}>{err}</div>}
+        </div>
         <div className="mono muted" style={{ fontSize: 11, maxWidth: 360, marginLeft: 'auto' }}>
           Each well's twin gives its best cycle and its cold decline. A free generator goes to the well with the most incremental oil per generator-day.
         </div>
@@ -128,11 +140,21 @@ function Gantt({ s, color }: { s: Schedule; color: string }) {
   const wells = Object.keys(s.per_well)
   const x = (d: number) => `${(Math.min(d, s.horizon) / s.horizon) * 100}%`
   return (
-    <div style={{ display: 'grid', gap: 6 }}>
+    <div style={{ display: 'grid', gap: 6, position: 'relative', paddingTop: s.maintenance.length ? 14 : 0 }}>
+      {s.maintenance.map((m, i) => (
+        <div key={`m${i}`} title={`Generator G${m.generator} maintenance days ${m.start}–${m.end}`} className="mono"
+          style={{ position: 'absolute', top: 0, bottom: 34, left: `calc(72px + (100% - 72px) * ${Math.min(m.start, s.horizon) / s.horizon})`,
+            width: `calc((100% - 72px) * ${(Math.min(m.end, s.horizon) - Math.min(m.start, s.horizon)) / s.horizon})`, borderLeft: '1px dashed var(--amber)', borderRight: '1px dashed var(--amber)',
+            background: 'rgba(244,162,97,.07)', fontSize: 9, color: 'var(--amber)', textAlign: 'center', pointerEvents: 'none' }}>G{m.generator} MAINT</div>
+      ))}
       {wells.map((w) => (
         <div key={w} style={{ display: 'grid', gridTemplateColumns: '64px 1fr', alignItems: 'center', gap: 8 }}>
           <span className="mono" style={{ fontSize: 11 }}>{w}</span>
           <div style={{ position: 'relative', height: 22, background: 'var(--bg)', borderRadius: 3 }}>
+            {s.outages.filter((o) => o.well_id === w).map((o, i) => (
+              <div key={`o${i}`} title={`${w} unavailable days ${o.start}–${o.end}`} style={{ position: 'absolute', top: 0, bottom: 0, left: x(o.start), width: `calc(${x(o.end)} - ${x(o.start)})`,
+                background: 'repeating-linear-gradient(45deg, rgba(239,83,80,.25) 0 4px, transparent 4px 8px)', borderRadius: 2 }} />
+            ))}
             {s.jobs.filter((j) => j.well_id === w).map((j, i) => (
               <div key={i}>
                 <div title={`${w}: production cycle to day ${Math.round(j.cycle_end)}`} style={{ position: 'absolute', top: 7, height: 8, left: x(j.start + j.inj_days), width: `calc(${x(j.cycle_end)} - ${x(j.start + j.inj_days)})`, background: color, opacity: 0.22, borderRadius: 2 }} />

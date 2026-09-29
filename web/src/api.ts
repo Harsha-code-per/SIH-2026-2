@@ -59,6 +59,7 @@ export type Live = {
 export type Job = { well_id: string; generator: number; start: number; inj_days: number; steam_t: number; cycle_end: number; gain_per_gen_day: number; x: X }
 export type Schedule = {
   jobs: Job[]; field_oil: number[]; per_well: Record<string, number[]>; generators: number; horizon: number
+  maintenance: { generator: number; start: number; end: number }[]; outages: { well_id: string; start: number; end: number }[]
   kpi: { oil_bbl: number; steam_t: number; sor: number; wells_steamed: number; cycles: number; float_days: number; expected_failures: number; net_value_cr: number; co2_t: number }
 }
 export type FieldPlan = { practice: Schedule; sequencing_only: Schedule; welltwin: Schedule }
@@ -108,7 +109,8 @@ export const api = {
   liveStep: (days: number) => call<Live>(`live/step?days=${days}`, {}),
   liveDecide: (alert_id: number, approve: boolean, option?: string) => call<Live>('live/decide', { alert_id, approve, option }),
   liveDyno: () => call<Card>('live/dyno'),
-  fieldSchedule: (generators: number, horizon: number) => call<FieldPlan>(`field/schedule?generators=${generators}&horizon=${horizon}`),
+  fieldSchedule: (generators: number, horizon: number, maintenance = '', outages = '') =>
+    call<FieldPlan>(`field/schedule?generators=${generators}&horizon=${horizon}&maintenance=${encodeURIComponent(maintenance)}&outages=${encodeURIComponent(outages)}`),
   learnLive: () => call<Learned>('learn/ingest-live', {}),
   learnUpload: (cycles_csv: string, daily_csv: string) => call<Learned>('learn/upload', { cycles_csv, daily_csv }),
   learnUploadXlsx: async (f: File): Promise<Learned> => {

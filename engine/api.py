@@ -228,18 +228,36 @@ def live_dyno():
 
 # --- field steam scheduler ---
 @lru_cache(maxsize=16)
-def _field_compare(generators, horizon):
-    return fieldsched.compare(generators, horizon)
+def _field_compare(generators, horizon, maintenance, outages):
+    return fieldsched.compare(generators, horizon, maintenance, outages)
+
+
+def _windows(spec, pattern, conv):
+    """'1:40-60,2:100-120' → ((1, 40, 60), (2, 100, 120)); empty → ()."""
+    import re
+    out = []
+    for part in filter(None, (p.strip() for p in (spec or "").split(","))):
+        m = re.fullmatch(pattern + r":(\d{1,3})-(\d{1,3})", part)
+        if not m or int(m[2]) >= int(m[3]):
+            raise HTTPException(422, f"bad window '{part}': use e.g. 1:40-60 or BGW-03:0-30")
+        out.append((conv(m[1]), int(m[2]), int(m[3])))
+    return tuple(out)
 
 
 learn._invalidate.append(_field_compare.cache_clear)
 
 
 @app.get("/api/field/schedule")
-def field_schedule(generators: int = 1, horizon: int = 180):
+def field_schedule(generators: int = 1, horizon: int = 180, maintenance: str = "", outages: str = ""):
     if not (1 <= generators <= 4 and 60 <= horizon <= 365):
         raise HTTPException(422, "generators 1–4, horizon 60–365 days")
-    return _py(_field_compare(generators, horizon))
+    mw = _windows(maintenance, r"([1-4])", int)
+    ow = _windows(outages, r"(BGW-\d{2})", str)
+    if any(g > generators for g, _, _ in mw):
+        raise HTTPException(422, "maintenance names a generator that is not in the fleet")
+    if any(w not in twin.field()["twins"] for w, _, _ in ow):
+        raise HTTPException(422, "outage names an unknown well")
+    return _py(_field_compare(generators, horizon, mw, ow))
 
 
 # --- learning loop ---

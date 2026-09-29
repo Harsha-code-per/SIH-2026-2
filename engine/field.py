@@ -50,7 +50,9 @@ def _cold(rate, days):
     return rate * np.exp(-np.arange(days) / COLD_DECLINE_D)
 
 
-def schedule(generators=1, horizon=180, plans="twin", order="value"):
+def schedule(generators=1, horizon=180, plans="twin", order="value", maintenance=(), outages=()):
+    """maintenance: (generator 1..G, start_d, end_d) windows when a generator is down.
+    outages: (well_id, start_d, end_d) windows when a well cannot be steamed (workover, access)."""
     wells = list(twin.field()["twins"])
     pl = {w: cycle_plan(w, plans) for w in wells}
     free = [0.0] * generators
@@ -71,6 +73,13 @@ def schedule(generators=1, horizon=180, plans="twin", order="value"):
         t = free[g]
         if t >= horizon:
             break
+        down = next((e for gg, s0, e in maintenance if gg == g + 1 and s0 <= t < e), None)
+        if down is not None:  # generator in maintenance
+            free[g] = down
+            continue
+        for ww, s0, e in outages:  # well unavailable when injection would start
+            if ww in ready and s0 <= t + P.RIG_MOVE_D < e:
+                ready[ww] = max(ready[ww], e - P.RIG_MOVE_D)
         cands = [w for w in wells if ready[w] <= t and w not in skip]
         if not cands:
             later = [ready[w] for w in wells if w not in skip and ready[w] > t]
@@ -88,6 +97,10 @@ def schedule(generators=1, horizon=180, plans="twin", order="value"):
             w = next(w for w in ordered if w in cands)
             turn = (wells.index(w) + 1) % len(wells)
         start = t + P.RIG_MOVE_D
+        clash = next((e for gg, s0, e in maintenance if gg == g + 1 and s0 < start + pl[w]["inj_days"] and e > t), None)
+        if clash is not None:  # the job would run into planned maintenance: wait it out
+            free[g] = clash
+            continue
         free[g] = start + pl[w]["inj_days"]
         ready[w] = start + pl[w]["cutoff"]
         jobs.append(dict(well_id=w, generator=g + 1, start=round(start, 1), inj_days=round(pl[w]["inj_days"], 1),
@@ -123,13 +136,15 @@ def schedule(generators=1, horizon=180, plans="twin", order="value"):
                  net_value_cr=round((oil * P.OIL_PRICE_PER_BBL - steam * P.STEAM_COST_PER_T
                                      - sum(pl[j["well_id"]]["failure_risk"] for j in done) * P.WORKOVER_COST) / 1e7, 2)),
         generators=generators, horizon=horizon, plans=plans, order=order,
+        maintenance=[dict(generator=g, start=s0, end=e) for g, s0, e in maintenance],
+        outages=[dict(well_id=w, start=s0, end=e) for w, s0, e in outages],
     )
 
 
-def compare(generators=1, horizon=180):
-    base = schedule(generators, horizon, "practice", "rotation")
-    seq = schedule(generators, horizon, "practice", "value")
-    ours = schedule(generators, horizon, "twin", "value")
+def compare(generators=1, horizon=180, maintenance=(), outages=()):
+    base = schedule(generators, horizon, "practice", "rotation", maintenance, outages)
+    seq = schedule(generators, horizon, "practice", "value", maintenance, outages)
+    ours = schedule(generators, horizon, "twin", "value", maintenance, outages)
     return dict(practice=base, sequencing_only=seq, welltwin=ours)
 
 
