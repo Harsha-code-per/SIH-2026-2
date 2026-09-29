@@ -50,6 +50,22 @@ def test():
     assert warned and warned >= 7, f"float alert lead time {warned} d"
     assert snap["kpi"]["float_days"] == 0, "approved alerts must prevent rod float"
 
+    opts = {o["key"] for a in snap["alerts"] for o in a.get("options", [])}
+    assert {"spm", "heater"} <= opts, "float alert must offer both remedies"
+
+    _, hist_c, hist_d = __import__("engine.history", fromlist=["load"]).load()
+    c3 = next(c for c in hist_c if c["well_id"] == "BGW-08" and int(c["cycle"]) == 3)
+    live.start(dict(well_id="BGW-08"), "external", {k: c3[k] for k in P.DECISIONS}, 3)
+    rows = [d for d in hist_d if d["well_id"] == "BGW-08" and int(d["cycle"]) == 3]
+    ext_warn = None
+    for d in rows:
+        s_ = live.observe([dict(day=d["day"], oil_bpd=d["oil_bpd"], min_load_kn=d["min_load_kn"], spm=d["spm"])])
+        fa = [a for a in s_["alerts"] if a["kind"] == "float"]
+        if fa and ext_warn is None:
+            ext_warn = fa[0]["float_day"] - s_["day"]
+    assert ext_warn and ext_warn >= 7, f"replayed historical cycle: float warning lead {ext_warn}"
+    assert not any(a["kind"] == "cooling" for a in s_["alerts"]), "no false cooling alarm on a normal cycle"
+
     c = field.compare(1)
     assert c["welltwin"]["kpi"]["net_value_cr"] > c["practice"]["kpi"]["net_value_cr"]
     assert c["welltwin"]["kpi"]["float_days"] == 0

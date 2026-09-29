@@ -39,10 +39,13 @@ export type Card = {
 }
 export type Alert = {
   id: number; day: number; kind: 'cooling' | 'drag' | 'float'; text: string; status: 'open' | 'approved' | 'rejected'
-  severity: 'info' | 'warning' | 'critical'; action: number[] | null; float_day?: number
+  severity: 'info' | 'warning' | 'critical'; action: boolean | null; float_day?: number
+  options?: { key: 'spm' | 'heater'; label: string; detail: string; float_days: number; oil: number; kwh: number; co2_t?: number }[]
+  recommended?: 'spm' | 'heater'; chosen?: 'spm' | 'heater'
 }
 export type Live = {
   well_id: string; cycle: number; day: number; stage: string; mission: Mission; x: X
+  source: 'simulated' | 'external'; heater: { kw: number; from_d: number } | null
   prod_start: number; inj_days: number; t_steam: number; r_heated: number
   truth_now: { t_res: number; mu_tub: number; spm: number; float_margin: number; oil: number }
   observed: { day: number[]; oil: number[]; min_load_kn: number[]; spm: number[] }
@@ -50,7 +53,7 @@ export type Live = {
   forecast: { day: number[]; oil: number[]; lo: number[]; hi: number[]; float_margin: number[] }
   issued_spm: number[]
   twin: { q_cold: number; tau0: number; drag_c: number; planned_q_cold: number; planned_tau0: number; planned_drag_c: number }
-  kpi: { cum_oil: number; forecast_at_deadline: number; float_days: number; resteam_day: number; cum_kwh: number }
+  kpi: { cum_oil: number; forecast_at_deadline: number; float_days: number; resteam_day: number; cum_kwh: number; co2_t: number }
   alerts: Alert[]; log: { day: number; kind: string; text: string }[]; complete: boolean
 }
 export type Job = { well_id: string; generator: number; start: number; inj_days: number; steam_t: number; cycle_end: number; gain_per_gen_day: number; x: X }
@@ -100,9 +103,10 @@ export const api = {
   explain: (m: Mission) => call<Explanation>('explain', m),
   simulate: (mission: Mission, x: Record<string, number>, controller: boolean) => call<WhatIf>('simulate', { mission, x, controller }),
   dyno: (mission: Mission, mode: 'plan' | 'practice', day: number) => call<Card>('dyno', { mission, mode, day }),
-  liveStart: (m: Mission) => call<Live>('live/start', m),
+  liveStart: (m: Mission, source: 'simulated' | 'external' = 'simulated') => call<Live>('live/start', { mission: m, source }),
+  liveSnapshot: () => call<Live>('live/snapshot'),
   liveStep: (days: number) => call<Live>(`live/step?days=${days}`, {}),
-  liveDecide: (alert_id: number, approve: boolean) => call<Live>('live/decide', { alert_id, approve }),
+  liveDecide: (alert_id: number, approve: boolean, option?: string) => call<Live>('live/decide', { alert_id, approve, option }),
   liveDyno: () => call<Card>('live/dyno'),
   fieldSchedule: (generators: number, horizon: number) => call<FieldPlan>(`field/schedule?generators=${generators}&horizon=${horizon}`),
   learnLive: () => call<Learned>('learn/ingest-live', {}),

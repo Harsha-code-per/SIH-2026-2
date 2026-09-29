@@ -110,8 +110,9 @@ def simulate(x, well, days=180, controller=True, spm_override=None):
         Used for issued work orders and operator changes mid-cycle.
     Returns dict of (N, days) arrays + (N,) summaries.
     """
-    steam, p, soak, stroke, spm_max, heater_kw = np.broadcast_arrays(
-        *(np.atleast_1d(np.asarray(x[k], float)) for k in P.DECISIONS), np.atleast_1d(np.asarray(x.get("heater_kw", 0.0), float)))
+    steam, p, soak, stroke, spm_max, heater_kw, heater_from = np.broadcast_arrays(
+        *(np.atleast_1d(np.asarray(x[k], float)) for k in P.DECISIONS),
+        np.atleast_1d(np.asarray(x.get("heater_kw", 0.0), float)), np.atleast_1d(np.asarray(x.get("heater_from_d", 0.0), float)))
     n = steam.shape[0]
     heater_w = heater_kw * 1e3
     ts, r_h, inj = heated_zone(steam, p, soak)
@@ -131,7 +132,8 @@ def simulate(x, well, days=180, controller=True, spm_override=None):
     # downhole heater at the pump warms the produced fluid; most of it leaks to the formation on the way up
     m_dot = gross_in * 0.159 * 980 / 86400
     t_tub = P.T_RES + 0.75 * (t_res - P.T_RES) - 4.0  # fluid cools rising 1,100 m
-    heater_on = on & (heater_w[:, None] > 0) & (t_tub < P.HEATER_ON_BELOW_C)  # thermostatic
+    heater_on = (on & (heater_w[:, None] > 0) & (t_tub < P.HEATER_ON_BELOW_C)  # thermostatic
+                 & (np.arange(days)[None, :] >= heater_from[:, None]))  # switched on from a given day (Live Ops)
     t_tub = t_tub + np.where(heater_on, heater_w[:, None] / (m_dot * P.FLUID_CP + P.HEATER_LOSS_W_PER_K), 0.0)
     mu_tub = viscosity_cp(t_tub)
     ev = volumetric_eff(mu_tub)

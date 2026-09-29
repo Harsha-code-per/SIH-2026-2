@@ -16,13 +16,24 @@ export function LiveScreen({ mission, onNext, auto }: { mission: Mission; onNext
   const [speed, setSpeed] = useState(auto ? 3 : 1)
   const [card, setCard] = useState<Card | null>(null)
   const [err, setErr] = useState('')
+  const [source, setSource] = useState<'simulated' | 'external'>('simulated')
 
-  const restart = () => { setCard(null); api.liveStart(mission).then((x) => { setS(x); setPlaying(true) }).catch((e) => setErr(String(e))) }
-  useEffect(restart, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const restart = (src = source) => {
+    setCard(null)
+    setSource(src)
+    api.liveStart(mission, src).then((x) => { setS(x); setPlaying(src === 'simulated') }).catch((e) => setErr(String(e)))
+  }
+  useEffect(() => restart(), []) // eslint-disable-line react-hooks/exhaustive-deps
+  // external feed: data arrives through /api/live/observe (connectors, SCADA gateway); just follow it
+  useEffect(() => {
+    if (source !== 'external') return
+    const id = setInterval(() => api.liveSnapshot().then(setS).catch(() => {}), 2000)
+    return () => clearInterval(id)
+  }, [source])
 
   const waiting = !!s?.alerts.some((a) => a.status === 'open')
   useEffect(() => {
-    if (!playing || !s || s.complete || waiting) return
+    if (!playing || !s || s.complete || waiting || s.source === 'external') return
     const id = setTimeout(() => api.liveStep(speed).then(setS).catch((e) => setErr(String(e))), TICK_MS)
     return () => clearTimeout(id)
   }, [playing, s, speed, waiting])
@@ -30,7 +41,8 @@ export function LiveScreen({ mission, onNext, auto }: { mission: Mission; onNext
   const bucket = s && s.day >= s.prod_start ? Math.floor(s.day / 5) : -1
   useEffect(() => { if (bucket >= 0) api.liveDyno().then(setCard).catch(() => {}) }, [bucket])
 
-  const decide = (a: Alert, approve: boolean) => api.liveDecide(a.id, approve).then((x) => { setS(x); setPlaying(true) })
+  const decide = (a: Alert, approve: boolean, option?: string) =>
+    api.liveDecide(a.id, approve, option).then((x) => { setS(x); setPlaying(x.source === 'simulated') })
   // auto demo: give each alert time to be read, approve it, and move on when the cycle ends
   const first = s?.alerts.find((a) => a.status === 'open')
   useAfter(auto && !!first, first?.action ? 4500 : 3000, () => first && decide(first, true))
@@ -78,7 +90,7 @@ export function LiveScreen({ mission, onNext, auto }: { mission: Mission; onNext
       <section style={{ display: 'grid', gap: 14, gridTemplateRows: 'auto auto auto minmax(210px, 1fr) minmax(210px, 1fr)' }}>
         <div className="panel" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
           <div>
-            <div className="label">Live · {s.well_id} · CSS cycle #{s.cycle} · SCADA + dyno feed</div>
+            <div className="label">Live · {s.well_id} · CSS cycle #{s.cycle} · {s.source === 'simulated' ? 'simulated field (hidden truth + surprises)' : 'external feed: POST /api/live/observe'}</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
               <span className="big" style={{ fontSize: 38 }}>DAY {String(s.day).padStart(3, '0')}</span>
               <span className={`pill ${s.stage === 'PRODUCTION' ? 'ok' : s.stage === 'RE-STEAM DUE' ? 'red' : 'cyan'}`}>{s.stage}</span>
@@ -86,9 +98,13 @@ export function LiveScreen({ mission, onNext, auto }: { mission: Mission; onNext
             </div>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-            <button className="btn ghost" onClick={() => setPlaying(!playing)} disabled={s.complete}>{playing ? '❚❚' : '▶'}</button>
-            {[1, 3].map((v) => <button key={v} className="btn ghost" style={{ color: speed === v ? 'var(--cyan)' : 'var(--muted)' }} onClick={() => setSpeed(v)}>{v}×</button>)}
-            <button className="btn ghost" onClick={restart}>RESTART</button>
+            {s.source === 'simulated' && <>
+              <button className="btn ghost" onClick={() => setPlaying(!playing)} disabled={s.complete}>{playing ? '❚❚' : '▶'}</button>
+              {[1, 3].map((v) => <button key={v} className="btn ghost" style={{ color: speed === v ? 'var(--cyan)' : 'var(--muted)' }} onClick={() => setSpeed(v)}>{v}×</button>)}
+            </>}
+            <button className="btn ghost" title="Simulated field vs. real readings pushed by a connector"
+              onClick={() => restart(source === 'simulated' ? 'external' : 'simulated')}>{source === 'simulated' ? 'USE EXTERNAL FEED' : 'USE SIMULATED FIELD'}</button>
+            <button className="btn ghost" onClick={() => restart()}>RESTART</button>
           </div>
         </div>
 
@@ -97,7 +113,7 @@ export function LiveScreen({ mission, onNext, auto }: { mission: Mission; onNext
             ['Oil produced', `${fmt(s.kpi.cum_oil)} bbl`, ''],
             [`Forecast · day ${s.mission.deadline_d}`, `${fmt(s.kpi.forecast_at_deadline)} bbl`, onTrack ? 'ok' : 'amber'],
             ['Rod-float days', String(s.kpi.float_days), s.kpi.float_days ? 'red' : 'ok'],
-            ['Re-steam due', `day ${s.kpi.resteam_day}`, ''],
+            s.heater ? ['Downhole heater', `ON ${s.heater.kw} kW since day ${s.heater.from_d}`, 'amber'] : ['Re-steam due', `day ${s.kpi.resteam_day}`, ''],
             ['SRP now', s.truth_now.spm ? `${s.truth_now.spm.toFixed(2)} SPM · ${(s.truth_now.spm * HZ_PER_SPM).toFixed(0)} Hz` : 'idle', 'cyan'],
           ].map(([k, v, c]) => (
             <div key={k} className="panel" style={{ padding: '10px 12px' }}>
@@ -160,13 +176,20 @@ export function LiveScreen({ mission, onNext, auto }: { mission: Mission; onNext
                   DAY {a.day} · {a.kind === 'float' ? 'ROD-FLOAT FORECAST' : a.kind === 'drag' ? 'ROD DRAG ANOMALY' : 'RESERVOIR COOLING'}
                 </div>
                 <p style={{ margin: '6px 0 10px', fontSize: 13, lineHeight: 1.5 }}>{a.text}</p>
+                {a.options?.map((o) => (
+                  <div key={o.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center', padding: '8px 10px', marginBottom: 6, borderRadius: 4,
+                    border: `1px solid ${o.key === a.recommended ? 'var(--cyan)' : 'var(--line)'}` }}>
+                    <div className="mono" style={{ fontSize: 11 }}>
+                      <b className={o.key === a.recommended ? 'cyan' : ''}>{o.label}</b>{o.key === a.recommended && <span className="muted"> · recommended</span>}
+                      <div className="muted">{o.detail}</div>
+                      <div>float {o.float_days} d · oil {o.oil >= 0 ? '+' : ''}{fmt(o.oil)} bbl · energy {o.kwh >= 0 ? '+' : ''}{fmt(o.kwh)} kWh{o.co2_t ? ` · +${o.co2_t} t CO₂` : ''}</div>
+                    </div>
+                    <button className={o.key === a.recommended ? 'btn' : 'btn ghost'} style={{ padding: '6px 10px', fontSize: 11 }} onClick={() => decide(a, true, o.key)}>APPROVE</button>
+                  </div>
+                ))}
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {a.action ? (
-                    <>
-                      <button className="btn" style={{ padding: '8px 14px', fontSize: 12 }} onClick={() => decide(a, true)}>APPROVE</button>
-                      <button className="btn ghost" onClick={() => decide(a, false)}>REJECT</button>
-                    </>
-                  ) : <button className="btn ghost" onClick={() => decide(a, true)}>ACKNOWLEDGE</button>}
+                  {a.action ? <button className="btn ghost" onClick={() => decide(a, false)}>REJECT</button>
+                    : <button className="btn ghost" onClick={() => decide(a, true)}>ACKNOWLEDGE</button>}
                 </div>
               </motion.div>
             ))}
@@ -174,13 +197,13 @@ export function LiveScreen({ mission, onNext, auto }: { mission: Mission; onNext
           {!open.length && <div className="mono muted" style={{ fontSize: 12 }}>No open alerts. The twin is tracking the well.</div>}
           {closed.map((a) => (
             <div key={a.id} className="mono" style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
-              <span className={a.status === 'approved' ? 'ok' : 'red'}>{a.status === 'approved' ? '✓' : '✗'}</span> day {a.day} · {a.text.split('.')[0]}
+              <span className={a.status === 'approved' ? 'ok' : 'red'}>{a.status === 'approved' ? '✓' : '✗'}</span> day {a.day} · {a.options?.find((o) => o.key === a.chosen)?.label ?? a.text.split('.')[0]}
             </div>
           ))}
         </div>
 
         <div className="panel" style={{ padding: 14 }}>
-          <div className="label" style={{ marginBottom: 6 }}>Measured dyno card · day {bucket >= 0 ? s.day : '–'}</div>
+          <div className="label" style={{ marginBottom: 6 }}>{s.source === 'simulated' ? 'Measured' : 'Twin-estimated'} dyno card · day {bucket >= 0 ? s.day : '–'}</div>
           {bucket >= 0 ? <DynoCard card={card} stroke={s.x.stroke_m} /> : <div className="mono muted" style={{ fontSize: 12 }}>pump idle</div>}
         </div>
 

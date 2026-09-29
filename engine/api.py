@@ -153,13 +153,51 @@ def dyno_card(q: DynoReq):
 class Decision(BaseModel):
     alert_id: int
     approve: bool
+    option: str | None = Field(None, pattern="^(spm|heater)$")
     actor: str = Field("", max_length=80)
 
 
+class LiveStart(BaseModel):
+    mission: Mission = Mission()
+    source: str = Field("simulated", pattern="^(simulated|external)$")
+    x: dict[str, float] | None = None   # replay a known cycle's settings
+    cycle: int | None = Field(None, ge=1, le=100)
+
+
+class Observation(BaseModel):
+    day: int = Field(ge=0, lt=DAYS)
+    oil_bpd: float = Field(ge=0, le=2000)
+    min_load_kn: float = Field(ge=-50, le=500)
+    spm: float | None = Field(None, ge=0, le=15)
+    kwh: float | None = Field(None, ge=0, le=1e5)
+
+
+class Observations(BaseModel):
+    rows: list[Observation] = Field(min_length=1, max_length=400)
+
+
 @app.post("/api/live/start")
-def live_start(m: Mission = Mission()):
-    _check(m.well_id)
-    return _py(live.start(m.model_dump()))
+def live_start(s: LiveStart = LiveStart()):
+    _check(s.mission.well_id)
+    if s.x is not None and not set(P.DECISIONS) <= set(s.x):
+        raise HTTPException(422, f"x must have keys {P.DECISIONS}")
+    return _py(live.start(s.mission.model_dump(), s.source, s.x, s.cycle))
+
+
+@app.post("/api/live/observe")
+def live_observe(o: Observations):
+    """Field data in: SCADA gateway, dyno export or CSV replay (see engine/connectors.py)."""
+    try:
+        return _py(live.observe([r.model_dump() for r in o.rows]))
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.get("/api/live/snapshot")
+def live_snapshot():
+    if not live.S:
+        raise HTTPException(409, "no live session")
+    return _py(live.snapshot())
 
 
 @app.post("/api/live/step")
@@ -174,9 +212,10 @@ def live_decide(d: Decision):
     a = next((a for a in live.S["alerts"] if a["id"] == d.alert_id), None)
     if a is None:
         raise HTTPException(404, "unknown alert")
-    snap = live.decide(d.alert_id, d.approve)
-    audit.log("live_decision", f"day {live.S['day']}: {'approved' if d.approve else 'rejected'}: {a['text'].split('.')[0]}",
-              live.S["well_id"], d.actor or "operator", "operator", dict(alert=a["kind"]))
+    snap = live.decide(d.alert_id, d.approve, d.option)
+    what = next((o["label"] for o in a.get("options", []) if o["key"] == a.get("chosen")), a["text"].split(".")[0])
+    audit.log("live_decision", f"day {live.S['day']}: {'approved' if d.approve else 'rejected'}: {what}",
+              live.S["well_id"], d.actor or "operator", "operator", dict(alert=a["kind"], option=a.get("chosen")))
     return _py(snap)
 
 
