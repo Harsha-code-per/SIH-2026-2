@@ -38,6 +38,7 @@ def card(spm, stroke_m, mu_cp, drag_c, fillage=1.0, strokes=3):
     attached, plunger_top, fluid_on = True, 0.0, True
     s_down = stroke_m
     rec = np.empty((keep, 4))  # carrier pos, surface load, plunger pos, pump load
+    plunger = np.empty(steps)  # plunger position history: the downhole stroke is shorter than the surface one
     sep = np.zeros(keep, bool)
     prev_up = False
 
@@ -73,13 +74,14 @@ def card(spm, stroke_m, mu_cp, drag_c, fillage=1.0, strokes=3):
             if carrier <= new[0]:
                 attached, new[0] = True, carrier
         u_old, u = u, new
+        plunger[i] = u[-1]
 
         j = i - (steps - keep)
         if j >= 0:
             rec[j] = carrier, max(ea * (u[1] - u[0]) / dx, 0.0) if attached else 0.0, u[-1], f_pump
             sep[j] = not attached
         if i == steps - keep:  # downhole stroke of the previous cycle feeds the fluid-pound trigger
-            s_down = max(float(np.ptp(u_old[-1:])) or stroke_m, 0.3 * stroke_m)
+            s_down = max(float(np.ptp(plunger[i - keep:i])) if i >= keep else stroke_m, 0.3 * stroke_m)
 
     idx = np.linspace(0, keep - 1, POINTS).astype(int)
     r = rec[idx]

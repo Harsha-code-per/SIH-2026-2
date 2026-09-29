@@ -223,10 +223,15 @@ def _float_alert(d, fit, f, float_day):
         return
     when = "Rods are floating now" if float_day <= d + 1 else f"Rods forecast to float on day {float_day} (in {float_day - d} d)"
     best = min(options, key=lambda o: (o["float_days"], o["kwh"] - 50 * o["oil"]))
-    made = _alert("float", f"{when} at the current work order ({int(f['float_days'][0])} float days forecast). "
-                           f"Recommended: {best['label']}.",
-                  severity="critical" if float_day <= d + 1 else "warning", action=True, float_day=float_day,
-                  options=[{k: v for k, v in o.items() if k != "apply"} for o in options], recommended=best["key"])
+    public = [{k: v for k, v in o.items() if k != "apply"} for o in options]
+    text = f"{when} at the current work order ({int(f['float_days'][0])} float days forecast). Recommended: {best['label']}."
+    still = next((a for a in S["alerts"] if a["kind"] == "float" and a["status"] == "open"), None)
+    if still:  # keep an unanswered alert current with today's fit instead of stale options
+        still.update(text=text, options=public, recommended=best["key"], float_day=float_day)
+        S["actions"][still["id"]] = {o["key"]: o["apply"] for o in options}
+        return
+    made = _alert("float", text, severity="critical" if float_day <= d + 1 else "warning", action=True,
+                  float_day=float_day, options=public, recommended=best["key"])
     if made:
         S["actions"][made["id"]] = {o["key"]: o["apply"] for o in options}
 
@@ -242,8 +247,8 @@ def decide(alert_id, approve, option=None):
         acts = S["actions"][alert_id]
         chosen = option if option in acts else a.get("recommended")
         act = acts[chosen]
-        if "spm" in act:
-            S["issued"] = act["spm"]
+        if "spm" in act:  # future days only: what the field already ran stays in the record
+            S["issued"][S["day"] + 1:] = act["spm"][S["day"] + 1:]
         if "heater" in act:
             S["heater"] = dict(kw=act["heater"][0], from_d=act["heater"][1])
         a["chosen"] = chosen

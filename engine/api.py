@@ -304,8 +304,9 @@ def learn_reset():
 
 def _logged_ingest(res):
     if res["ok"]:
-        audit.log("ingest", f"cycle #{res['cycle']} ingested from {res['source']}; cycle error "
-                            f"{res['cum_error_before'] * 100:.1f}% → {res['cum_error_after'] * 100:.1f}% after recalibration",
+        e0, e1 = res["cum_error_before"], res["cum_error_after"]
+        errs = f"; cycle error {e0 * 100:.1f}% → {e1 * 100:.1f}% after recalibration" if e0 is not None and e1 is not None else ""
+        audit.log("ingest", f"cycle #{res['cycle']} ingested from {res['source']}{errs}",
                   res["well_id"], "data engineer", "data")
     return res
 

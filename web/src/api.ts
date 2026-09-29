@@ -85,7 +85,7 @@ export type TwinSnap = { theta: { q_cold: number; tau0: number; drag_c: number; 
 export type Learned = {
   ok: boolean; issues: Issue[]; source?: string; well_id?: string; cycle?: number; before?: TwinSnap; after?: TwinSnap
   plan_vs_actual?: { day: number[]; actual: number[]; before: number[]; after: number[] }
-  cum_error_before?: number; cum_error_after?: number
+  cum_error_before?: number | null; cum_error_after?: number | null
 }
 
 async function call<T>(path: string, body?: unknown): Promise<T> {

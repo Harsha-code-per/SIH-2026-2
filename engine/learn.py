@@ -50,59 +50,91 @@ def template_xlsx():
 
 
 def parse_csv(text):
-    return [{k.strip(): v.strip() for k, v in r.items()} for r in csv.DictReader(io.StringIO(text.strip()))]
+    """Tolerant of real exports: short rows (missing trailing fields) and extra trailing commas."""
+    return [{k.strip(): (v or "").strip() for k, v in r.items() if isinstance(k, str) and not isinstance(v, list)}
+            for r in csv.DictReader(io.StringIO(text.strip()))]
 
 
 def validate(cycles, daily):
     """Data-quality report against the CSV contract. Returns (clean_cycles, clean_daily, issues)."""
     issues = []
+    err = lambda file, msg: issues.append(dict(level="error", file=file, msg=msg))
+    warn = lambda file, msg: issues.append(dict(level="warning", file=file, msg=msg))
     for name, rows, cols in (("cycles", cycles, CYCLE_COLS), ("daily", daily, DAILY_COLS)):
         missing = [c for c in cols if rows and c not in rows[0]]
         if not rows:
-            issues.append(dict(level="error", file=name, msg="no rows"))
+            err(name, "no rows")
         if missing:
-            issues.append(dict(level="error", file=name, msg=f"missing columns: {', '.join(missing)}"))
+            err(name, f"missing columns: {', '.join(missing)}")
     if any(i["level"] == "error" for i in issues):
         return [], [], issues
 
-    known = set(twin.field()["twins"])
-    have = {(c["well_id"], int(c["cycle"])) for c in twin.field()["twins"].get(cycles[0]["well_id"], {}).get("cycles", [])}
+    twins = twin.field()["twins"]
 
     def num(row, cols, file, i):
         out = dict(row)
         for c in cols:
-            if c in ("well_id", "failure_day"):
+            if c == "well_id":
+                continue
+            if c == "failure_day":  # optional: blank when there was no failure
+                v = str(row.get(c) or "").strip()
+                try:
+                    out[c] = float(v) if v else ""
+                except ValueError:
+                    err(file, f"row {i + 1}: failure_day={v!r} is not a number")
+                    return None
                 continue
             try:
                 out[c] = float(row[c])
             except (TypeError, ValueError):
-                issues.append(dict(level="error", file=file, msg=f"row {i + 1}: {c}={row[c]!r} is not a number"))
+                err(file, f"row {i + 1}: {c}={row[c]!r} is not a number")
                 return None
             lo, hi = RANGES.get(c, (-np.inf, np.inf))
             if not lo <= out[c] <= hi:
-                issues.append(dict(level="error", file=file, msg=f"row {i + 1}: {c}={out[c]:g} outside plausible range {lo:g}–{hi:g}"))
+                err(file, f"row {i + 1}: {c}={out[c]:g} outside plausible range {lo:g}–{hi:g}")
                 return None
         return out
 
     cyc = [o for i, r in enumerate(cycles) if (o := num(r, CYCLE_COLS, "cycles", i))]
     day = [o for i, r in enumerate(daily) if (o := num(r, DAILY_COLS, "daily", i))]
+    wells = {c["well_id"] for c in cyc}
+    if len(wells) > 1:
+        err("cycles", f"one well per upload please (found {', '.join(sorted(wells))})")
+    seen = set()
     for c in cyc:
-        if c["well_id"] not in known:
-            issues.append(dict(level="error", file="cycles", msg=f"{c['well_id']}: unknown well (needs ≥3 cycles of history to calibrate)"))
-        if (c["well_id"], int(c["cycle"])) in have:
-            issues.append(dict(level="error", file="cycles", msg=f"{c['well_id']} cycle {int(c['cycle'])} already in history"))
-    keys = {(c["well_id"], int(c["cycle"])) for c in cyc}
-    orphan = sum((d["well_id"], int(d["cycle"])) not in keys for d in day)
+        key = (c["well_id"], int(c["cycle"]))
+        if c["well_id"] not in twins:
+            err("cycles", f"{c['well_id']}: unknown well (needs ≥3 cycles of history to calibrate)")
+        elif any(int(h["cycle"]) == key[1] for h in twins[c["well_id"]]["cycles"]):
+            err("cycles", f"{key[0]} cycle {key[1]} already in history")
+        if key in seen:
+            err("cycles", f"{key[0]} cycle {key[1]} appears twice in the upload")
+        seen.add(key)
+        if c["cycle_days"] > DAYS - 1:
+            warn("cycles", f"{key[0]} cycle {key[1]}: {c['cycle_days']:g} days is longer than the twin horizon; using the first {DAYS - 1}")
+            c["cycle_days"] = float(DAYS - 1)
+        if c["rod_failure"] and c["failure_day"] == "":
+            warn("cycles", f"{key[0]} cycle {key[1]}: rod failure without failure_day; failure timing ignored")
+            c["rod_failure"] = 0.0
+    orphan = sum((d["well_id"], int(d["cycle"])) not in seen for d in day)
     if orphan:
-        issues.append(dict(level="warning", file="daily", msg=f"{orphan} daily rows have no matching cycle row and are ignored"))
-    day = [d for d in day if (d["well_id"], int(d["cycle"])) in keys]
-    for k in keys:
+        warn("daily", f"{orphan} daily rows have no matching cycle row and are ignored")
+    late = sum(d["day"] >= DAYS for d in day)
+    if late:
+        warn("daily", f"{late} daily rows beyond day {DAYS - 1} (twin horizon) are ignored")
+    day = [d for d in day if (d["well_id"], int(d["cycle"])) in seen and d["day"] < DAYS]
+    for k in seen:
         ds = sorted(d["day"] for d in day if (d["well_id"], int(d["cycle"])) == k)
-        if len(ds) < 20:
-            issues.append(dict(level="warning", file="daily", msg=f"{k[0]} cycle {k[1]}: only {len(ds)} production days"))
+        if not ds:
+            err("daily", f"{k[0]} cycle {k[1]}: no production days, so there is nothing to learn from")
+        elif len(ds) < 20:
+            warn("daily", f"{k[0]} cycle {k[1]}: only {len(ds)} production days")
         gaps = int(np.sum(np.diff(ds) > 1)) if len(ds) > 1 else 0
         if gaps:
-            issues.append(dict(level="warning", file="daily", msg=f"{k[0]} cycle {k[1]}: {gaps} gaps in daily data"))
+            warn("daily", f"{k[0]} cycle {k[1]}: {gaps} gaps in daily data")
+        dup = len(ds) - len(set(ds))
+        if dup:
+            err("daily", f"{k[0]} cycle {k[1]}: {dup} duplicate days")
     if not issues:
         issues.append(dict(level="ok", file="all", msg=f"{len(cyc)} cycle(s), {len(day)} daily rows passed all checks"))
     return cyc, day, issues
@@ -130,17 +162,23 @@ def ingest(cycles, daily, source):
         return dict(ok=False, issues=issues)
     wid = cyc[0]["well_id"]
     before = _snapshot(wid)
+    n_c, n_d = len(EXTRA["cycles"]), len(EXTRA["daily"])
     EXTRA["cycles"].extend(cyc)
     EXTRA["daily"].extend(day)
-    _reset_caches()
-    after = _snapshot(wid)
+    try:  # all-or-nothing: a cycle the twin cannot absorb must not leave the API broken
+        _reset_caches()
+        after = _snapshot(wid)
+    except Exception:
+        del EXTRA["cycles"][n_c:], EXTRA["daily"][n_d:]
+        _reset_caches()
+        raise
 
     c = cyc[-1]
     d = [r for r in day if int(r["cycle"]) == int(c["cycle"])]
     days = np.array([int(r["day"]) for r in d])
     actual = np.array([r["oil_bpd"] for r in d])
     pb, pa = _predict(before["theta"], c, d)[days], _predict(after["theta"], c, d)[days]
-    err = lambda p: float(np.abs(p.sum() / actual.sum() - 1))
+    err = lambda p: float(abs(p.sum() / actual.sum() - 1)) if actual.sum() > 0 else None
     return dict(
         ok=True, source=source, well_id=wid, cycle=int(c["cycle"]), issues=issues, before=before, after=after,
         plan_vs_actual=dict(day=days.tolist(), actual=actual.round(2).tolist(), before=pb.round(2).tolist(), after=pa.round(2).tolist()),

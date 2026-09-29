@@ -46,7 +46,9 @@ def test():
         for a in snap["alerts"]:
             if a["status"] == "open":
                 warned = warned or (a["kind"] == "float" and a["float_day"] - snap["day"])
+                past = live.S["issued"][:snap["day"] + 1].copy()
                 live.decide(a["id"], True)
+                assert np.array_equal(np.nan_to_num(past), np.nan_to_num(live.S["issued"][:snap["day"] + 1])), "remedy rewrote SPM history"
     assert warned and warned >= 7, f"float alert lead time {warned} d"
     assert snap["kpi"]["float_days"] == 0, "approved alerts must prevent rod float"
 
@@ -66,6 +68,9 @@ def test():
     assert ext_warn and ext_warn >= 7, f"replayed historical cycle: float warning lead {ext_warn}"
     assert not any(a["kind"] == "cooling" for a in s_["alerts"]), "no false cooling alarm on a normal cycle"
 
+    j8 = next(j for j in field.schedule(1, 180, "twin", "value", (), (("BGW-08", 15, 35),))["jobs"] if j["well_id"] == "BGW-08")
+    assert j8["start"] >= 35 or j8["start"] + j8["inj_days"] <= 15, "steam job overlaps a well outage"
+
     c = field.compare(1)
     assert c["welltwin"]["kpi"]["net_value_cr"] > c["practice"]["kpi"]["net_value_cr"]
     assert c["welltwin"]["kpi"]["float_days"] == 0
@@ -81,6 +86,22 @@ def test():
     h = ph.simulate(x, w, 240, controller=False)
     assert h["float_days"][1] < h["float_days"][0] and h["cum_kwh"][1, -1] > h["cum_kwh"][0, -1], "heater trades energy for float"
     assert rec["co2_t"] < res["baseline"]["co2_t"]
+
+    # data-contract edge cases from the code review
+    t = learn.template()
+    short = learn.parse_csv(t["cycles"].replace(",0,\n", ",0\n") + "BGW-08,11,700,97,3.5,2.0,4.5,116,1800,18000,0,0,,\n")
+    assert all(None not in r and "" not in r for r in short)
+    base_c, base_d = len(learn.EXTRA["cycles"]), len(learn.EXTRA["daily"])
+    cyc = dict(learn.parse_csv(t["cycles"])[0], cycle="11")
+    rows = [dict(well_id="BGW-08", cycle="11", day=str(d), oil_bpd="15", spm="3", kwh="100", min_load_kn="20") for d in range(11, 260)]
+    assert not learn.ingest([cyc], [], "t")["ok"], "cycle without production days must be rejected"
+    assert not learn.ingest([cyc, dict(cyc, well_id="BGW-03", cycle="12")], rows, "t")["ok"], "multi-well upload must be rejected"
+    assert not learn.ingest([cyc, cyc], rows, "t")["ok"], "duplicate cycle must be rejected"
+    assert (len(learn.EXTRA["cycles"]), len(learn.EXTRA["daily"])) == (base_c, base_d), "rejected uploads must not change history"
+    ok = learn.ingest([dict(cyc, rod_failure="1", failure_day="45", cycle_days="300")], rows, "t")
+    assert ok["ok"] and any("horizon" in i["msg"] for i in ok["issues"]), ok["issues"]
+    assert all(d["day"] < 240 for d in learn.EXTRA["daily"])
+    learn.reset()
 
     c2, d2 = learn.parse_xlsx(learn.template_xlsx())
     assert c2[0]["well_id"] == "BGW-08" and d2[0]["day"] == "11"

@@ -119,11 +119,11 @@ export function LearnScreen({ onNext, auto }: { onNext: () => void; auto: boolea
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
               <div style={{ background: 'var(--panel-2)', padding: 12, borderRadius: 4 }}>
                 <div className="label" style={{ fontSize: 10 }}>Cycle error · old twin</div>
-                <div className="mono amber" style={{ fontSize: 26, fontWeight: 700 }}>{((res.cum_error_before ?? 0) * 100).toFixed(1)}%</div>
+                <div className="mono amber" style={{ fontSize: 26, fontWeight: 700 }}>{res.cum_error_before == null ? '–' : `${(res.cum_error_before * 100).toFixed(1)}%`}</div>
               </div>
               <div style={{ background: 'var(--panel-2)', padding: 12, borderRadius: 4 }}>
                 <div className="label" style={{ fontSize: 10 }}>Cycle error · recalibrated</div>
-                <div className="mono cyan" style={{ fontSize: 26, fontWeight: 700 }}>{((res.cum_error_after ?? 0) * 100).toFixed(1)}%</div>
+                <div className="mono cyan" style={{ fontSize: 26, fontWeight: 700 }}>{res.cum_error_after == null ? '–' : `${(res.cum_error_after * 100).toFixed(1)}%`}</div>
               </div>
             </div>
           </section>

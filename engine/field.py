@@ -77,8 +77,8 @@ def schedule(generators=1, horizon=180, plans="twin", order="value", maintenance
         if down is not None:  # generator in maintenance
             free[g] = down
             continue
-        for ww, s0, e in outages:  # well unavailable when injection would start
-            if ww in ready and s0 <= t + P.RIG_MOVE_D < e:
+        for ww, s0, e in outages:  # well unavailable for any part of the injection it would get
+            if ww in ready and s0 < t + P.RIG_MOVE_D + pl[ww]["inj_days"] and e > t + P.RIG_MOVE_D:
                 ready[ww] = max(ready[ww], e - P.RIG_MOVE_D)
         cands = [w for w in wells if ready[w] <= t and w not in skip]
         if not cands:
@@ -95,12 +95,13 @@ def schedule(generators=1, horizon=180, plans="twin", order="value", maintenance
         else:  # today's practice: the generator moves along the wells in turn
             ordered = wells[turn:] + wells[:turn]
             w = next(w for w in ordered if w in cands)
-            turn = (wells.index(w) + 1) % len(wells)
         start = t + P.RIG_MOVE_D
         clash = next((e for gg, s0, e in maintenance if gg == g + 1 and s0 < start + pl[w]["inj_days"] and e > t), None)
-        if clash is not None:  # the job would run into planned maintenance: wait it out
+        if clash is not None:  # the job would run into planned maintenance: wait it out (the well keeps its turn)
             free[g] = clash
             continue
+        if order != "value":
+            turn = (wells.index(w) + 1) % len(wells)
         free[g] = start + pl[w]["inj_days"]
         ready[w] = start + pl[w]["cutoff"]
         jobs.append(dict(well_id=w, generator=g + 1, start=round(start, 1), inj_days=round(pl[w]["inj_days"], 1),
