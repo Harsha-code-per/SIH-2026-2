@@ -43,9 +43,9 @@ An engineer states a **mission**: *"1,600 bbl in 90 days, 1,000 t of steam, 7 MW
 
 | Module | What it does |
 |---|---|
-| **Live Ops** | The twin shadows the well through the cycle on daily SCADA + dyno data. It re-estimates cooling and rod drag as they drift, forecasts float three weeks ahead, and proposes a concrete SPM/VFD change for the operator to approve or reject. Every decision goes to the audit log. |
+| **Live Ops** | The twin shadows the well through the cycle on daily SCADA + dyno data. It re-estimates cooling and rod drag as they drift and forecasts float three weeks ahead. It then offers two remedies checked on the twin, **slow the pump** or **switch on the downhole heater**, each with its oil, energy and CO₂ cost. The operator approves or rejects; every decision goes to the audit log. It runs on a simulated field or on an **external feed** (`POST /api/live/observe`). |
 | **Dynamometer cards** | Surface and downhole cards solved from the Gibbs damped wave equation using the twin's viscosity, so they morph as the well cools and show rod-float separation and fluid pound. |
-| **Field scheduler** | With limited steam generators, decides which well to steam next by incremental oil per generator-day, and compares against steaming wells in turn. |
+| **Field scheduler** | With limited steam generators, decides which well to steam next by incremental oil per generator-day, and compares against steaming wells in turn. Handles generator maintenance windows and well outages. |
 | **Learning loop** | Ingest the executed cycle, or OIL exports as **Excel (.xlsx)** or CSV. Data-quality checks run, the twin recalibrates, the envelope grows, and plan-vs-actual error is re-measured. |
 | **What-if sandbox** | Sliders for every CSS + SRP setting, drawn over the well's validated envelope, plus a **downhole electric heater** lever. The twin answers instantly with P10–P90, SOR, energy, CO₂, cost and rod-float days. |
 | **Work orders + audit** | The recommended plan becomes a printable operating order with **four-eyes sign-off** (engineer prepares, a different supervisor approves). Every decision, ingest and approval is kept in a persistent SQLite audit trail. |
@@ -108,6 +108,16 @@ Optional LLM (works fully offline without it), in `.env` at the repo root:
 NVIDIA_API_KEY=nvapi-...
 NVIDIA_MODEL=nvidia/nemotron-3-super-120b-a12b
 ```
+
+## Connecting real field data
+
+Live Ops accepts readings from any source through one endpoint:
+```bash
+curl -X POST localhost:8765/api/live/start -H 'content-type: application/json' -d '{"source":"external"}'
+curl -X POST localhost:8765/api/live/observe -H 'content-type: application/json' \
+     -d '{"rows":[{"day":40,"oil_bpd":20.5,"min_load_kn":12.0,"spm":3.0}]}'
+```
+To test the pipeline, `python -m engine.connectors replay BGW-08 3` streams a recorded cycle as if it were live. On that historical cycle, which ended in a rod failure, the twin warns of float 19 days ahead. `engine/connectors.py` also maps raw SCADA tags to observations (`TAG_MAP`) for an OPC-UA/Modbus gateway.
 
 ## Architecture
 

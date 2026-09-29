@@ -20,9 +20,10 @@ make docker   # container build + run (UI + API :8765); make docker-down
 - `engine/twin.py`: calibration, conformal error, validated envelope, anomalies. `field()` is cached; the API warms it at import.
 - `engine/optimize.py`: `plan(mission)` → funnel, strategies A–E, baseline, evidence, trace. `DEMO` is the video mission.
 - `engine/dyno.py`: Gibbs damped wave equation → surface/downhole cards (+ rule-based diagnosis).
-- `engine/live.py`: one global live session. The field = hidden truth + surprises (faster cooling, emulsion drag). The twin re-fits (q_cold, tau0, drag_c) with priors, forecasts, raises alerts; approved actions change the issued SPM.
+- `engine/live.py`: one global live session, `source` = simulated (hidden truth + surprises: faster cooling, emulsion drag) or external (`observe()` rows). The twin re-fits (q_cold, tau0, drag_c) with priors (warm-started), forecasts, and raises alerts. Float alerts carry remedy options (`spm` / `heater`); an approved option changes the issued SPM or switches the heater on from that day.
 - `engine/field.py`: per-well best cycle (`cycle_plan`, cached) + generator list scheduling; `compare()` = practice vs sequencing-only vs WellTwin.
 - `engine/learn.py`: CSV contract validation, ingest into `history.EXTRA` (in-memory), cache reset + recalibration, plan-vs-actual.
+- `engine/connectors.py`: field-data connectors: CSV replay into Live Ops and SCADA tag → observation mapping.
 - `engine/audit.py`: SQLite (stdlib) audit events + work orders with four-eyes review. `WELLTWIN_DB` env overrides the path (Docker uses a volume).
 - `engine/llm.py`: NVIDIA NIM parse/explain + number guard + fallbacks.
 - `engine/api.py`: FastAPI routes under `/api`; serves `web/dist` if built.
